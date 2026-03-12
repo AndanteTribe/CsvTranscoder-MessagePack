@@ -432,6 +432,40 @@ public ref struct CsvReader
         return ThrowFormatException<decimal>(span);
     }
 
+    /// <summary>Reads the current field and parses it as <see cref="DateTime"/>.</summary>
+    /// <remarks>
+    /// Parsing is attempted with <see cref="System.Buffers.Text.Utf8Parser.TryParse"/> using the
+    /// default format (ISO 8601 / RFC 3339) first. If that fails, the field is decoded as a UTF-8
+    /// string and parsed with <see cref="DateTime.TryParse(string, System.IFormatProvider, System.Globalization.DateTimeStyles, out DateTime)"/> using the invariant culture,
+    /// supporting a broader set of locale-neutral date/time strings.
+    /// </remarks>
+    public DateTime ReadDateTime()
+    {
+        TryReadField(out var field);
+        Span<byte> buffer = stackalloc byte[64];
+        var span = GetFieldSpan(in field, buffer);
+
+        if (Utf8Parser.TryParse(span, out DateTime value, out _, standardFormat: 'O'))
+        {
+            return value;
+        }
+
+        if (Utf8Parser.TryParse(span, out value, out _, standardFormat: 'R'))
+        {
+            return value;
+        }
+
+        // Fall back to string parsing for formats not handled by Utf8Parser (e.g. "yyyy/MM/dd HH:mm:ss").
+        var text = Encoding.UTF8.GetString(span);
+        if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out value))
+        {
+            return value;
+        }
+
+        return ThrowFormatException<DateTime>(span);
+    }
+
     /// <summary>Reads the current field and returns the first <see cref="char"/> of its UTF-8 decoded value.</summary>
     public char ReadChar()
     {

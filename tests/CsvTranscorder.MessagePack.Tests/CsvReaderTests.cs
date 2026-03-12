@@ -293,6 +293,66 @@ public class ReadDecimalTests
     }
 }
 
+public class ReadDateTimeTests
+{
+    private static CsvTranscodeOptions Opts => new()
+    {
+        HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
+        NewLine = "\n", Separator = ','
+    };
+
+    [Fact]
+    public void ReadDateTime_Iso8601_RoundTrip()
+    {
+        var expected = new DateTime(2024, 6, 15, 12, 30, 0, DateTimeKind.Utc);
+        var iso = expected.ToString("O");
+        var reader = CsvReaderFactory.Create(iso + "\n", Opts);
+        Assert.Equal(expected, reader.ReadDateTime().ToUniversalTime());
+    }
+
+    [Fact]
+    public void ReadDateTime_DateOnly_InvariantFormat()
+    {
+        var reader = CsvReaderFactory.Create("2024-06-15\n", Opts);
+        var result = reader.ReadDateTime();
+        Assert.Equal(new DateTime(2024, 6, 15), result.Date);
+    }
+
+    [Fact]
+    public void ReadDateTime_DateTimeWithTime_InvariantFormat()
+    {
+        var reader = CsvReaderFactory.Create("2024-06-15 12:30:00\n", Opts);
+        var result = reader.ReadDateTime();
+        Assert.Equal(new DateTime(2024, 6, 15, 12, 30, 0), result);
+    }
+
+    [Fact]
+    public void ReadDateTime_SlashSeparated_InvariantFormat()
+    {
+        var reader = CsvReaderFactory.Create("2024/06/15\n", Opts);
+        var result = reader.ReadDateTime();
+        Assert.Equal(new DateTime(2024, 6, 15), result.Date);
+    }
+
+    [Fact]
+    public void ReadDateTime_InvalidValue_ThrowsFormatException()
+    {
+        var reader = CsvReaderFactory.Create("not-a-date\n", Opts);
+        // CsvReader is a ref struct and cannot be captured in a lambda,
+        // so we use try/catch instead of Assert.Throws.
+        try { reader.ReadDateTime(); Assert.Fail("Expected FormatException"); }
+        catch (FormatException) { }
+    }
+
+    [Fact]
+    public void ReadDateTime_MultipleFieldsOnRow()
+    {
+        var reader = CsvReaderFactory.Create("2024-01-01,2025-12-31\n", Opts);
+        Assert.Equal(new DateTime(2024, 1, 1), reader.ReadDateTime().Date);
+        Assert.Equal(new DateTime(2025, 12, 31), reader.ReadDateTime().Date);
+    }
+}
+
 public class ReadCharTests
 {
     private static CsvTranscodeOptions Opts => new()

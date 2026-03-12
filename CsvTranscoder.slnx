@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="sandbox/CsvTranscoder.MessagePack.Sample/CsvTranscoder.MessagePack.Sample.csproj" />
+  <Project Path="src/CsvTranscoder.MessagePack/CsvTranscoder.MessagePack.csproj" />
+</Solution>

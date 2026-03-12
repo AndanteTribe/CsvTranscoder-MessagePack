@@ -541,12 +541,9 @@ public ref struct CsvReader
             ThrowEmptyFieldException<char>();
         }
 
-        if (field.IsSingleSegment)
-        {
-            return Encoding.UTF8.GetString(field.FirstSpan)[0];
-        }
-
-        return Encoding.UTF8.GetString(field.ToArray())[0];
+        var temp = (Span<char>)stackalloc char[Encoding.UTF8.GetCharCount(field.FirstSpan)];
+        Encoding.UTF8.TryGetChars(field.FirstSpan, temp, out _);
+        return temp[0];
     }
 
     /// <summary>Reads the current field and returns it as a UTF-8 decoded <see cref="string"/>.</summary>

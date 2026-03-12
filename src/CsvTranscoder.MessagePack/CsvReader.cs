@@ -48,6 +48,12 @@ public ref struct CsvReader
             {
                 SkipRow();
             }
+
+            // Skip any comment rows that immediately follow the header.
+            if (_options.AllowRowComments)
+            {
+                SkipLeadingCommentRows();
+            }
         }
     }
 
@@ -83,6 +89,25 @@ public ref struct CsvReader
     }
 
     /// <summary>
+    /// Skips any rows starting with <c>#</c> from the current position.
+    /// Used both after <see cref="SkipHeader"/> and inside <see cref="TryAdvanceToNextRow"/>.
+    /// </summary>
+    private void SkipLeadingCommentRows()
+    {
+        var newLine = _newLine.Span;
+        while (!_reader.End && _reader.IsNext((byte)'#', advancePast: false))
+        {
+            if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: false))
+            {
+                _reader.AdvanceToEnd();
+                return;
+            }
+
+            _reader.Advance(newLine.Length);
+        }
+    }
+
+    /// <summary>
     /// Advances past the current row's newline and positions the reader at the start of the next row.
     /// Comment rows (lines starting with <c>#</c>) are skipped automatically when
     /// <see cref="CsvTranscodeOptions.AllowRowComments"/> is <see langword="true"/>.
@@ -102,16 +127,7 @@ public ref struct CsvReader
 
         if (_options.AllowRowComments)
         {
-            while (!_reader.End && _reader.IsNext((byte)'#', advancePast: false))
-            {
-                if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: false))
-                {
-                    _reader.AdvanceToEnd();
-                    return false;
-                }
-
-                _reader.Advance(newLine.Length);
-            }
+            SkipLeadingCommentRows();
         }
 
         return !_reader.End;

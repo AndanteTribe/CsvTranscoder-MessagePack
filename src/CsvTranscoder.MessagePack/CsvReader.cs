@@ -7,10 +7,15 @@ namespace AndanteTribe.Csv;
 
 public ref struct CsvReader
 {
+    /// <summary>Maximum number of columns that can be tracked as comment columns.</summary>
+    private const int MaxCommentColumns = 64;
+
     private SequenceReader<byte> _reader;
     private readonly CsvTranscodeOptions _options;
     private readonly ReadOnlyMemory<byte> _newLine;
     private readonly byte _separator;
+    private ulong _commentColumnMask;
+    private int _currentColumn;
 
     public readonly CsvTranscodeOptions Options => _options;
     public readonly long Consumed => _reader.Consumed;
@@ -27,12 +32,53 @@ public ref struct CsvReader
 
     /// <summary>
     /// Skips the header row when <see cref="CsvTranscodeOptions.HasHeader"/> is <see langword="true"/>.
+    /// When <see cref="CsvTranscodeOptions.AllowColumnComments"/> is also <see langword="true"/>,
+    /// the header is parsed to identify comment columns (those whose header value starts with <c>#</c>);
+    /// those columns are then silently skipped during all subsequent field reads.
     /// </summary>
     public void SkipHeader()
     {
         if (_options.HasHeader)
         {
-            SkipRow();
+            if (_options.AllowColumnComments)
+            {
+                BuildCommentColumnMask();
+            }
+            else
+            {
+                SkipRow();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads through the header row and records which column indices start with <c>#</c>
+    /// into <see cref="_commentColumnMask"/>. Advances past the header row's newline on exit.
+    /// Only the first <see cref="MaxCommentColumns"/> (64) columns can be tracked as comment columns;
+    /// columns beyond that index are always treated as data columns.
+    /// </summary>
+    private void BuildCommentColumnMask()
+    {
+        int column = 0;
+        var newLine = _newLine.Span;
+
+        while (!_reader.End)
+        {
+            if (_reader.IsNext(newLine[0], advancePast: false))
+            {
+                _reader.Advance(newLine.Length);
+                break;
+            }
+
+            bool isComment = _reader.IsNext((byte)'#', advancePast: false);
+            ReadFieldRaw(out _);
+
+            if (isComment && column < MaxCommentColumns)
+            {
+                _commentColumnMask |= 1UL << column;
+            }
+
+            column++;
         }
     }
 
@@ -44,6 +90,7 @@ public ref struct CsvReader
     /// <returns><see langword="true"/> if there is more data to read; otherwise <see langword="false"/>.</returns>
     public bool TryAdvanceToNextRow()
     {
+        _currentColumn = 0;
         var newLine = _newLine.Span;
         if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: false))
         {
@@ -86,7 +133,38 @@ public ref struct CsvReader
     /// <summary>Reads and discards the current field.</summary>
     public void SkipField() => TryReadField(out _);
 
+    /// <summary>
+    /// Reads the next logical field, automatically skipping any comment columns
+    /// (as identified during <see cref="SkipHeader"/> when
+    /// <see cref="CsvTranscodeOptions.AllowColumnComments"/> is <see langword="true"/>).
+    /// </summary>
     private bool TryReadField(out ReadOnlySequence<byte> field)
+    {
+        while (true)
+        {
+            if (_reader.End)
+            {
+                field = default;
+                return false;
+            }
+
+            int col = _currentColumn++;
+            bool isCommentCol = _options.AllowColumnComments
+                && _commentColumnMask != 0
+                && col < MaxCommentColumns
+                && (_commentColumnMask & (1UL << col)) != 0;
+
+            if (isCommentCol)
+            {
+                ReadFieldRaw(out _);
+                continue;
+            }
+
+            return ReadFieldRaw(out field);
+        }
+    }
+
+    private bool ReadFieldRaw(out ReadOnlySequence<byte> field)
     {
         if (_reader.End)
         {

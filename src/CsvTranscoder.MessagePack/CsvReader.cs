@@ -94,7 +94,7 @@ public ref struct CsvReader
             return false;
         }
 
-        if (_reader.IsNext((byte)'"', advancePast: false))
+        if (_options.Quote != Quote.None && _reader.IsNext((byte)'"', advancePast: false))
         {
             return TryReadQuotedField(out field);
         }

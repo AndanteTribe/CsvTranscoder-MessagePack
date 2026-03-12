@@ -7,5 +7,14 @@ public record CsvTranscodeOptions
     public bool AllowRowComments { get; init; } = true;
     public string NewLine { get; init; } = System.Environment.NewLine;
     public char Separator { get; init; } = ',';
+    public Quote Quote { get; init; } = Quote.Minimal;
     public ICsvFormatterResolver Resolver { get; init; }
+}
+
+public enum Quote : byte
+{
+    None = 0,
+    Minimal = 1,
+    NoneNumeric = 2,
+    All = 3
 }

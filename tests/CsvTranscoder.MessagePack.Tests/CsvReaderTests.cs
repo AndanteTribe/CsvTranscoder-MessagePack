@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Text;
 using AndanteTribe.Csv;
 
-namespace CsvTranscorder.MessagePack.Tests;
+namespace CsvTranscoder.MessagePack.Tests;
 
 /// <summary>
 /// Helper to create a <see cref="CsvReader"/> from a plain UTF-8 string.
@@ -829,6 +829,20 @@ public class QuoteTests
     }
 
     [Fact]
+    public void Quote_All_UnquotedField_ThrowsFormatException()
+    {
+        var opts = new CsvTranscodeOptions
+        {
+            HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
+            NewLine = "\n", Separator = ',', Quote = Quote.All
+        };
+        // Quote.All requires all fields to be quoted; an unquoted field must throw.
+        var reader = CsvReaderFactory.Create("unquoted\n", opts);
+        try { reader.ReadString(); Assert.Fail("Expected FormatException"); }
+        catch (FormatException) { }
+    }
+
+    [Fact]
     public void Quote_NoneNumeric_ParsesQuotedField()
     {
         var opts = new CsvTranscodeOptions
@@ -839,6 +853,51 @@ public class QuoteTests
         var reader = CsvReaderFactory.Create("\"text\",42\n", opts);
         Assert.Equal("text", reader.ReadString());
         Assert.Equal(42, reader.ReadInt32());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Multi-byte newline (CRLF) correctness
+// ═══════════════════════════════════════════════════════════════════════
+
+public class CrLfNewLineTests
+{
+    private static CsvTranscodeOptions CrLfOpts => new()
+    {
+        HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
+        NewLine = "\r\n", Separator = ','
+    };
+
+    [Fact]
+    public void CrLf_SingleField_ParsesCorrectly()
+    {
+        var reader = CsvReaderFactory.Create("hello\r\n", CrLfOpts);
+        Assert.Equal("hello", reader.ReadString());
+    }
+
+    [Fact]
+    public void CrLf_MultipleRows_ParsesCorrectly()
+    {
+        var reader = CsvReaderFactory.Create("1\r\n2\r\n3\r\n", CrLfOpts);
+        Assert.Equal(1, reader.ReadInt32());
+        Assert.True(reader.TryAdvanceToNextRow());
+        Assert.Equal(2, reader.ReadInt32());
+        Assert.True(reader.TryAdvanceToNextRow());
+        Assert.Equal(3, reader.ReadInt32());
+        Assert.False(reader.TryAdvanceToNextRow());
+    }
+
+    [Fact]
+    public void CrLf_MultipleFieldsPerRow_ParsesCorrectly()
+    {
+        var reader = CsvReaderFactory.Create("a,b,c\r\nx,y,z\r\n", CrLfOpts);
+        Assert.Equal("a", reader.ReadString());
+        Assert.Equal("b", reader.ReadString());
+        Assert.Equal("c", reader.ReadString());
+        Assert.True(reader.TryAdvanceToNextRow());
+        Assert.Equal("x", reader.ReadString());
+        Assert.Equal("y", reader.ReadString());
+        Assert.Equal("z", reader.ReadString());
     }
 }
 

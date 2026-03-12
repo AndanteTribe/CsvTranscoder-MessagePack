@@ -24,6 +24,9 @@ public ref struct CsvReader
 
     public CsvReader(ReadOnlySequence<byte> sequence, CsvTranscodeOptions options)
     {
+        if (string.IsNullOrEmpty(options.NewLine))
+            throw new ArgumentException("NewLine must not be null or empty.", nameof(options));
+
         _reader = new SequenceReader<byte>(sequence);
         _options = options;
         _newLine = Encoding.UTF8.GetBytes(options.NewLine);
@@ -70,7 +73,8 @@ public ref struct CsvReader
 
         while (!_reader.End)
         {
-            if (_reader.IsNext(newLine[0], advancePast: false))
+            // Check for the full newline sequence (handles multi-byte newlines like \r\n correctly).
+            if (_reader.IsNext(newLine, advancePast: false))
             {
                 _reader.Advance(newLine.Length);
                 break;
@@ -94,8 +98,31 @@ public ref struct CsvReader
     /// </summary>
     private void SkipLeadingCommentRows()
     {
-        var newLine = _newLine.Span;
         while (!_reader.End && _reader.IsNext((byte)'#', advancePast: false))
+        {
+            SkipToEndOfRow();
+        }
+    }
+
+    /// <summary>
+    /// Advances past the next occurrence of the configured newline sequence.
+    /// Correctly handles multi-byte newlines (e.g. <c>\r\n</c>): a bare occurrence of the
+    /// first byte that is not followed by the rest of the sequence is treated as data and skipped.
+    /// </summary>
+    private void SkipToEndOfRow()
+    {
+        var newLine = _newLine.Span;
+
+        if (newLine.Length == 1)
+        {
+            // Fast path for single-byte newlines (e.g. '\n').
+            if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: true))
+                _reader.AdvanceToEnd();
+            return;
+        }
+
+        // Multi-byte newline: scan for the first byte, then verify the full sequence.
+        while (!_reader.End)
         {
             if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: false))
             {
@@ -103,7 +130,11 @@ public ref struct CsvReader
                 return;
             }
 
-            _reader.Advance(newLine.Length);
+            if (_reader.IsNext(newLine, advancePast: true))
+                return; // consumed the full newline sequence
+
+            // Bare occurrence of the first byte that is not a real newline — skip it.
+            _reader.Advance(1);
         }
     }
 
@@ -116,14 +147,7 @@ public ref struct CsvReader
     public bool TryAdvanceToNextRow()
     {
         _currentColumn = 0;
-        var newLine = _newLine.Span;
-        if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: false))
-        {
-            _reader.AdvanceToEnd();
-            return false;
-        }
-
-        _reader.Advance(newLine.Length);
+        SkipToEndOfRow();
 
         if (_options.AllowRowComments)
         {
@@ -134,17 +158,7 @@ public ref struct CsvReader
     }
 
     /// <summary>Skips the remainder of the current row including its newline sequence.</summary>
-    public void SkipRow()
-    {
-        var newLine = _newLine.Span;
-        if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: false))
-        {
-            _reader.AdvanceToEnd();
-            return;
-        }
-
-        _reader.Advance(newLine.Length);
-    }
+    public void SkipRow() => SkipToEndOfRow();
 
     /// <summary>Reads and discards the current field.</summary>
     public void SkipField() => TryReadField(out _);
@@ -188,29 +202,77 @@ public ref struct CsvReader
             return false;
         }
 
-        if (_options.Quote != Quote.None && _reader.IsNext((byte)'"', advancePast: false))
+        var quote = _options.Quote;
+
+        // Quote.All: every field must be quoted; throw if opening '"' is absent.
+        if (quote == Quote.All)
+        {
+            if (!_reader.IsNext((byte)'"', advancePast: false))
+                ThrowExpectedQuoteException();
+            return TryReadQuotedField(out field);
+        }
+
+        // Quote.Minimal / Quote.NoneNumeric: strip quotes when a field starts with '"'.
+        if (quote != Quote.None && _reader.IsNext((byte)'"', advancePast: false))
         {
             return TryReadQuotedField(out field);
         }
 
         var newLine = _newLine.Span;
-        Span<byte> terminators = stackalloc byte[] { _separator, newLine[0] };
 
-        if (_reader.TryReadToAny(out field, terminators, advancePastDelimiter: false))
+        // Fast path for single-byte newlines (e.g. '\n').
+        if (newLine.Length == 1)
         {
-            // Consume the separator if that is what we stopped at; leave a newline for TryAdvanceToNextRow.
-            if (!_reader.End && _reader.IsNext(_separator, advancePast: true))
+            Span<byte> terminators = stackalloc byte[] { _separator, newLine[0] };
+            if (_reader.TryReadToAny(out field, terminators, advancePastDelimiter: false))
             {
-                // separator consumed
+                // Consume the separator if that is what we stopped at; leave a newline for TryAdvanceToNextRow.
+                _reader.IsNext(_separator, advancePast: true);
+                return true;
             }
 
+            // No terminator — read to end of sequence.
+            field = _reader.UnreadSequence;
+            _reader.AdvanceToEnd();
             return true;
         }
 
-        // No terminator — read to end of sequence.
-        field = _reader.UnreadSequence;
-        _reader.AdvanceToEnd();
-        return true;
+        // Multi-byte newline path (e.g. '\r\n'): scan for separator or full newline sequence.
+        // We track where the field started so that a Sequence.Slice captures all data including
+        // any bare occurrences of the first newline byte that turned out not to be a real newline.
+        var start = _reader.Position;
+        Span<byte> firstByteTerminators = stackalloc byte[] { _separator, newLine[0] };
+
+        while (true)
+        {
+            if (!_reader.TryReadToAny(out ReadOnlySequence<byte> _, firstByteTerminators, advancePastDelimiter: false))
+            {
+                // No separator or newline first-byte found; the rest of the data is all field content.
+                field = _reader.Sequence.Slice(start);
+                _reader.AdvanceToEnd();
+                return true;
+            }
+
+            // Stopped at the field separator.
+            if (_reader.IsNext(_separator, advancePast: false))
+            {
+                field = _reader.Sequence.Slice(start, _reader.Position);
+                _reader.Advance(1); // consume separator
+                return true;
+            }
+
+            // Stopped at the first byte of the newline sequence. Verify the full sequence.
+            if (_reader.IsNext(newLine, advancePast: false))
+            {
+                // Full newline found — field ends here; leave the newline for TryAdvanceToNextRow.
+                field = _reader.Sequence.Slice(start, _reader.Position);
+                return true;
+            }
+
+            // Bare first-byte-of-newline inside field data (e.g. a bare '\r'). Advance past it and
+            // continue scanning. The byte will be included in the final Slice because 'start' is fixed.
+            _reader.Advance(1);
+        }
     }
 
     private bool TryReadQuotedField(out ReadOnlySequence<byte> field)
@@ -234,24 +296,12 @@ public ref struct CsvReader
         return true;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ReadOnlySpan<byte> GetFieldSpan(in ReadOnlySequence<byte> field, Span<byte> buffer)
-    {
-        if (field.IsSingleSegment)
-        {
-            return field.FirstSpan;
-        }
-
-        field.CopyTo(buffer);
-        return buffer[..(int)field.Length];
-    }
-
     /// <summary>Reads the current field and parses it as <see cref="bool"/>.</summary>
     public bool ReadBoolean()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[8];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[8]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out bool value, out _))
         {
@@ -271,8 +321,8 @@ public ref struct CsvReader
     public byte ReadByte()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[8];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[8]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out byte value, out _))
         {
@@ -286,8 +336,8 @@ public ref struct CsvReader
     public sbyte ReadSByte()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[8];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[8]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out sbyte value, out _))
         {
@@ -301,8 +351,8 @@ public ref struct CsvReader
     public short ReadInt16()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[8];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[8]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out short value, out _))
         {
@@ -316,8 +366,8 @@ public ref struct CsvReader
     public ushort ReadUInt16()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[8];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[8]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out ushort value, out _))
         {
@@ -331,8 +381,8 @@ public ref struct CsvReader
     public int ReadInt32()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[16];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[16]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out int value, out _))
         {
@@ -346,8 +396,8 @@ public ref struct CsvReader
     public uint ReadUInt32()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[16];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[16]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out uint value, out _))
         {
@@ -361,8 +411,8 @@ public ref struct CsvReader
     public long ReadInt64()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[24];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[24]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out long value, out _))
         {
@@ -376,8 +426,8 @@ public ref struct CsvReader
     public ulong ReadUInt64()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[24];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[24]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out ulong value, out _))
         {
@@ -391,8 +441,8 @@ public ref struct CsvReader
     public float ReadSingle()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[32];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[32]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out float value, out _))
         {
@@ -406,8 +456,8 @@ public ref struct CsvReader
     public double ReadDouble()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[32];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[32]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out double value, out _))
         {
@@ -421,8 +471,8 @@ public ref struct CsvReader
     public decimal ReadDecimal()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[32];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[32]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out decimal value, out _))
         {
@@ -435,15 +485,16 @@ public ref struct CsvReader
     /// <summary>Reads the current field and parses it as <see cref="DateTime"/>.</summary>
     /// <remarks>
     /// Parsing is attempted with <see cref="System.Buffers.Text.Utf8Parser.TryParse"/> using the
-    /// default format (ISO 8601 / RFC 3339) first. If that fails, the field is decoded as a UTF-8
-    /// string and parsed with <see cref="DateTime.TryParse(string, System.IFormatProvider, System.Globalization.DateTimeStyles, out DateTime)"/> using the invariant culture,
-    /// supporting a broader set of locale-neutral date/time strings.
+    /// ISO 8601 (<c>'O'</c>) and RFC 1123 (<c>'R'</c>) formats first. If those fail, the field is
+    /// decoded as a UTF-8 string and parsed with
+    /// <see cref="DateTime.TryParse(string, System.IFormatProvider, System.Globalization.DateTimeStyles, out DateTime)"/>
+    /// using the invariant culture, supporting a broader set of locale-neutral date/time strings.
     /// </remarks>
     public DateTime ReadDateTime()
     {
         TryReadField(out var field);
-        Span<byte> buffer = stackalloc byte[64];
-        var span = GetFieldSpan(in field, buffer);
+        using var owner = new FieldSpanOwner(in field, stackalloc byte[64]);
+        var span = owner.Span;
 
         if (Utf8Parser.TryParse(span, out DateTime value, out _, standardFormat: 'O'))
         {
@@ -509,4 +560,57 @@ public ref struct CsvReader
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowEmptyFieldException<T>()
         => throw new FormatException($"Cannot parse empty field as {typeof(T).Name}.");
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowExpectedQuoteException()
+        => throw new FormatException("Expected a quoted field (Quote.All requires all fields to be quoted).");
+}
+
+/// <summary>
+/// Provides a <see cref="ReadOnlySpan{T}"/> view over a CSV field, using a stack-allocated buffer
+/// for small multi-segment sequences and a pooled array for larger ones.
+/// Must be disposed to return any pooled array to <see cref="ArrayPool{T}.Shared"/>.
+/// </summary>
+file ref struct FieldSpanOwner
+{
+    private byte[]? _rented;
+
+    public ReadOnlySpan<byte> Span { get; }
+
+    public FieldSpanOwner(in ReadOnlySequence<byte> field, Span<byte> stackBuffer)
+    {
+        if (field.IsEmpty)
+        {
+            Span = default;
+            return;
+        }
+
+        if (field.IsSingleSegment)
+        {
+            Span = field.FirstSpan;
+            return;
+        }
+
+        var length = (int)field.Length;
+        if (length <= stackBuffer.Length)
+        {
+            field.CopyTo(stackBuffer);
+            Span = stackBuffer[..length];
+            return;
+        }
+
+        // Field is larger than the stack buffer; fall back to a pooled array.
+        _rented = ArrayPool<byte>.Shared.Rent(length);
+        field.CopyTo(_rented);
+        Span = _rented.AsSpan(0, length);
+    }
+
+    public void Dispose()
+    {
+        if (_rented != null)
+        {
+            ArrayPool<byte>.Shared.Return(_rented);
+            _rented = null;
+        }
+    }
 }

@@ -25,7 +25,9 @@ public ref struct CsvReader
     public CsvReader(ReadOnlySequence<byte> sequence, CsvTranscodeOptions options)
     {
         if (string.IsNullOrEmpty(options.NewLine))
+        {
             throw new ArgumentException("NewLine must not be null or empty.", nameof(options));
+        }
 
         _reader = new SequenceReader<byte>(sequence);
         _options = options;
@@ -68,7 +70,7 @@ public ref struct CsvReader
     /// </summary>
     private void BuildCommentColumnMask()
     {
-        int column = 0;
+        var column = 0;
         var newLine = _newLine.Span;
 
         while (!_reader.End)
@@ -80,7 +82,7 @@ public ref struct CsvReader
                 break;
             }
 
-            bool isComment = _reader.IsNext((byte)'#', advancePast: false);
+            var isComment = _reader.IsNext((byte)'#', advancePast: false);
             ReadFieldRaw(out _);
 
             if (isComment && column < MaxCommentColumns)
@@ -117,7 +119,10 @@ public ref struct CsvReader
         {
             // Fast path for single-byte newlines (e.g. '\n').
             if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: true))
+            {
                 _reader.AdvanceToEnd();
+            }
+
             return;
         }
 
@@ -131,7 +136,9 @@ public ref struct CsvReader
             }
 
             if (_reader.IsNext(newLine, advancePast: true))
+            {
                 return; // consumed the full newline sequence
+            }
 
             // Bare occurrence of the first byte that is not a real newline — skip it.
             _reader.Advance(1);
@@ -178,11 +185,8 @@ public ref struct CsvReader
                 return false;
             }
 
-            int col = _currentColumn++;
-            bool isCommentCol = _options.AllowColumnComments
-                && _commentColumnMask != 0
-                && col < MaxCommentColumns
-                && (_commentColumnMask & (1UL << col)) != 0;
+            var col = _currentColumn++;
+            var isCommentCol = _options.AllowColumnComments && _commentColumnMask != 0 && col < MaxCommentColumns && (_commentColumnMask & (1UL << col)) != 0;
 
             if (isCommentCol)
             {
@@ -208,7 +212,10 @@ public ref struct CsvReader
         if (quote == Quote.All)
         {
             if (!_reader.IsNext((byte)'"', advancePast: false))
+            {
                 ThrowExpectedQuoteException();
+            }
+
             return TryReadQuotedField(out field);
         }
 
@@ -241,7 +248,7 @@ public ref struct CsvReader
         // We track where the field started so that a Sequence.Slice captures all data including
         // any bare occurrences of the first newline byte that turned out not to be a real newline.
         var start = _reader.Position;
-        Span<byte> firstByteTerminators = stackalloc byte[] { _separator, newLine[0] };
+        var firstByteTerminators = (Span<byte>)[_separator, newLine[0]];
 
         while (true)
         {
@@ -310,8 +317,15 @@ public ref struct CsvReader
 
         if (span.Length == 1)
         {
-            if (span[0] == (byte)'1') return true;
-            if (span[0] == (byte)'0') return false;
+            if (span[0] == (byte)'1')
+            {
+                return true;
+            }
+
+            if (span[0] == (byte)'0')
+            {
+                return false;
+            }
         }
 
         return ThrowFormatException<bool>(span);
@@ -507,9 +521,9 @@ public ref struct CsvReader
         }
 
         // Fall back to string parsing for formats not handled by Utf8Parser (e.g. "yyyy/MM/dd HH:mm:ss").
-        var text = Encoding.UTF8.GetString(span);
-        if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out value))
+        var text = (Span<char>)stackalloc char[Encoding.UTF8.GetCharCount(span)];
+        Encoding.UTF8.TryGetChars(span, text, out _);
+        if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out value))
         {
             return value;
         }

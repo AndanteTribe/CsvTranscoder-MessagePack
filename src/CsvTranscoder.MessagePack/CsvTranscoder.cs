@@ -15,9 +15,11 @@ public static class CsvTranscoder
     /// Core transcoding loop: optionally skips the header, then calls the formatter for each
     /// data row. All row payloads are buffered in a pooled <see cref="ByteBufferWriter"/> so
     /// that the element count is known before the MessagePack array header is written.
+    /// Options are read from <see cref="CsvReader.Options"/>.
     /// </summary>
-    private static void TranscodeCore<T>(ref CsvReader reader, ref MessagePackWriter writer, CsvTranscodeOptions options)
+    private static void TranscodeCore<T>(ref CsvReader reader, ref MessagePackWriter writer)
     {
+        var options = reader.Options;
         var formatter = options.Resolver.GetFormatterWithVerify<T>();
 
         if (options.HasHeader)
@@ -70,7 +72,7 @@ public static class CsvTranscoder
         var opts = options ?? new CsvTranscodeOptions();
         var msgWriter = new MessagePackWriter(writer);
         var reader = new CsvReader(byteSequence, opts);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        TranscodeCore<T>(ref reader, ref msgWriter);
         msgWriter.Flush();
     }
 
@@ -79,7 +81,7 @@ public static class CsvTranscoder
     {
         var opts = options ?? new CsvTranscodeOptions();
         var reader = new CsvReader(byteSequence, opts);
-        TranscodeCore<T>(ref reader, ref writer, opts);
+        TranscodeCore<T>(ref reader, ref writer);
     }
 
     /// <summary>Transcodes CSV data in <paramref name="byteSequence"/> to MessagePack, writing the result to <paramref name="stream"/>.</summary>
@@ -94,7 +96,7 @@ public static class CsvTranscoder
         using var buffer = new ByteBufferWriter();
         var msgWriter = new MessagePackWriter(buffer);
         var reader = new CsvReader(byteSequence, opts);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        TranscodeCore<T>(ref reader, ref msgWriter);
         msgWriter.Flush();
         stream.Write(buffer.WrittenSpan);
     }
@@ -111,7 +113,7 @@ public static class CsvTranscoder
         using var buffer = new ByteBufferWriter();
         var msgWriter = new MessagePackWriter(buffer);
         var reader = new CsvReader(byteSequence, opts);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        TranscodeCore<T>(ref reader, ref msgWriter);
         msgWriter.Flush();
         await stream.WriteAsync(buffer.WrittenMemory, cancellationToken).ConfigureAwait(false);
     }
@@ -125,13 +127,13 @@ public static class CsvTranscoder
     {
         ArgumentNullException.ThrowIfNull(writer);
         var msgWriter = new MessagePackWriter(writer);
-        TranscodeCore<T>(ref reader, ref msgWriter, reader.Options);
+        TranscodeCore<T>(ref reader, ref msgWriter);
         msgWriter.Flush();
     }
 
     /// <summary>Transcodes CSV data from <paramref name="reader"/> to MessagePack, writing the result via <paramref name="writer"/>.</summary>
     public static void ToMessagePack<T>(ref CsvReader reader, ref MessagePackWriter writer)
-        => TranscodeCore<T>(ref reader, ref writer, reader.Options);
+        => TranscodeCore<T>(ref reader, ref writer);
 
     /// <summary>Transcodes CSV data from <paramref name="reader"/> to MessagePack, writing the result to <paramref name="stream"/>.</summary>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
@@ -143,7 +145,7 @@ public static class CsvTranscoder
 
         using var buffer = new ByteBufferWriter();
         var msgWriter = new MessagePackWriter(buffer);
-        TranscodeCore<T>(ref reader, ref msgWriter, reader.Options);
+        TranscodeCore<T>(ref reader, ref msgWriter);
         msgWriter.Flush();
         stream.Write(buffer.WrittenSpan);
     }
@@ -167,7 +169,7 @@ public static class CsvTranscoder
 
         var buffer = new ByteBufferWriter();
         var msgWriter = new MessagePackWriter(buffer);
-        TranscodeCore<T>(ref reader, ref msgWriter, reader.Options);
+        TranscodeCore<T>(ref reader, ref msgWriter);
         msgWriter.Flush();
         return WriteAndDisposeAsync(buffer, stream, cancellationToken);
     }

@@ -658,6 +658,62 @@ public class CsvTranscoder_Integration_Tests
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+//  Null options — default CsvTranscodeOptions is used when null
+//  Covers the `options ?? new CsvTranscodeOptions()` branch in each
+//  ReadOnlySequence<byte> overload.
+// ═══════════════════════════════════════════════════════════════════════
+
+public class CsvTranscoder_NullOptions_Tests
+{
+    // Build a single-row CSV that is valid with the default CsvTranscodeOptions
+    // (HasHeader=true, NewLine=Environment.NewLine, Separator=',').
+    private static ReadOnlySequence<byte> MakeCsv()
+    {
+        var nl = System.Environment.NewLine;
+        var csv = $"value{nl}7{nl}";
+        return TranscoderTestHelper.ToSequence(csv);
+    }
+
+    [Fact]
+    public void ToMessagePack_Sequence_IBufferWriter_NullOptions_UsesDefaults()
+    {
+        var output = new ArrayBufferWriter<byte>();
+        ToMessagePack<int>(MakeCsv(), output, options: null);
+        var result = MessagePackSerializer.Deserialize<int[]>(output.WrittenMemory);
+        Assert.Equal([7], result);
+    }
+
+    [Fact]
+    public void ToMessagePack_Sequence_RefWriter_NullOptions_UsesDefaults()
+    {
+        var output = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(output);
+        ToMessagePack<int>(MakeCsv(), ref writer, options: null);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<int[]>(output.WrittenMemory);
+        Assert.Equal([7], result);
+    }
+
+    [Fact]
+    public void ToMessagePack_Sequence_Stream_NullOptions_UsesDefaults()
+    {
+        using var ms = new MemoryStream();
+        ToMessagePack<int>(MakeCsv(), ms, options: null);
+        var result = MessagePackSerializer.Deserialize<int[]>(ms.ToArray());
+        Assert.Equal([7], result);
+    }
+
+    [Fact]
+    public async Task ToMessagePackAsync_Sequence_Stream_NullOptions_UsesDefaults()
+    {
+        using var ms = new MemoryStream();
+        await ToMessagePackAsync<int>(MakeCsv(), ms, options: null);
+        var result = MessagePackSerializer.Deserialize<int[]>(ms.ToArray());
+        Assert.Equal([7], result);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  Helper – write-only stream for validation tests
 // ═══════════════════════════════════════════════════════════════════════
 

@@ -390,4 +390,84 @@ public class FieldSpanOwnerViaMultiSegmentTests
         writer.Flush();
         Assert.True(MessagePackSerializer.Deserialize<bool>(buffer.WrittenMemory));
     }
+
+    [Fact]
+    public void MultiSegment_LargeField_UsesPooledArray()
+    {
+        // Multi-segment field of 9 bytes total ("not-a-bo" + "ol!\n") exceeds ReadBoolean's
+        // 8-byte stack buffer, so FieldSpanOwner rents from ArrayPool (lines 618-621).
+        // On Dispose, the rented array is returned (lines 627-628).
+        // The value is not a valid boolean, so FormatException is expected.
+        // Note: CsvReader and MessagePackWriter are ref structs and cannot be captured in
+        // a lambda, so try/catch is used instead of Assert.Throws.
+        var seq = EdgeCaseHelpers.CreateMultiSegment(
+            Encoding.UTF8.GetBytes("not-a-bo"),
+            Encoding.UTF8.GetBytes("ol!\n"));
+        var opts = EdgeCaseHelpers.SimpleOptions;
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        var reader = new CsvReader(seq, opts);
+        try { BooleanFormatter.Instance.Transcode(ref writer, ref reader); Assert.Fail("Expected FormatException"); }
+        catch (FormatException) { }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SkipToEndOfRow — CRLF with no \r in content (lines 132-135)
+// ═══════════════════════════════════════════════════════════════════════
+
+public class SkipToEndOfRowCrLfNoCarriageReturnTests
+{
+    [Fact]
+    public void SkipRow_CrLf_NoCarriageReturnFound_AdvancesToEnd()
+    {
+        // Data "abc" with CRLF newline and no '\r' anywhere:
+        // TryAdvanceTo('\r') returns false → AdvanceToEnd() + return (lines 134-135).
+        var bytes = Encoding.UTF8.GetBytes("abc");
+        var reader = new CsvReader(new ReadOnlySequence<byte>(bytes), EdgeCaseHelpers.CrLfOptions);
+        reader.SkipRow();
+        Assert.True(reader.End);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  TryReadField — returning false after all comment columns consumed
+//  (lines 182-185: _reader.End becomes true inside the comment-skip loop)
+// ═══════════════════════════════════════════════════════════════════════
+
+public class TryReadFieldAllCommentColumnsTests
+{
+    [Fact]
+    public void ReadString_AllColumnsAreComments_ReturnsEmpty()
+    {
+        // Header "#a" is a comment column. Data row "x" (no trailing newline) is the only
+        // value; it fills the single comment column. After consuming it, the loop in
+        // TryReadField checks _reader.End which is now true → field = default, return false.
+        // ReadString then returns string.Empty.
+        var opts = new CsvTranscodeOptions
+        {
+            HasHeader = true, AllowColumnComments = true, AllowRowComments = false,
+            NewLine = "\n", Separator = ',',
+        };
+        var bytes = Encoding.UTF8.GetBytes("#a\nx");
+        var reader = new CsvReader(new ReadOnlySequence<byte>(bytes), opts);
+        reader.SkipHeader();
+        Assert.Equal(string.Empty, reader.ReadString());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  IsNextFieldEmpty — reader at end returns true (line 522)
+// ═══════════════════════════════════════════════════════════════════════
+
+public class IsNextFieldEmptyAtEndTests
+{
+    [Fact]
+    public void IsNextFieldEmpty_ReaderAtEnd_ReturnsTrue()
+    {
+        // An empty sequence means the reader is already at end; IsNextFieldEmpty must return true.
+        var bytes = Encoding.UTF8.GetBytes("");
+        var reader = new CsvReader(new ReadOnlySequence<byte>(bytes), EdgeCaseHelpers.SimpleOptions);
+        Assert.True(reader.IsNextFieldEmpty());
+    }
 }

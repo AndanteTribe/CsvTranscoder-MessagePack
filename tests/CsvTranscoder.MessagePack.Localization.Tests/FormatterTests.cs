@@ -16,7 +16,7 @@ file static class FormatterTestHelper
 {
     public static readonly MessagePackSerializerOptions LocalizationMpOptions =
         MessagePackSerializerOptions.Standard.WithResolver(
-            CompositeResolver.Create(
+            global::MessagePack.Resolvers.CompositeResolver.Create(
                 global::Localization.MessagePack.LocalizationResolver.Shared,
                 global::MessagePack.Resolvers.StandardResolver.Instance));
 

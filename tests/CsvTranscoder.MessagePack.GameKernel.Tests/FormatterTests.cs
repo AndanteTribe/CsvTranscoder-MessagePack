@@ -4,7 +4,6 @@ using AndanteTribe.Csv;
 using AndanteTribe.Csv.Formatters;
 using GameKernel;
 using MessagePack;
-using MessagePack.Resolvers;
 
 namespace CsvTranscoder.MessagePack.GameKernel.Tests;
 
@@ -22,7 +21,7 @@ file static class FormatterTestHelper
 {
     public static readonly MessagePackSerializerOptions GameKernelMpOptions =
         MessagePackSerializerOptions.Standard.WithResolver(
-            CompositeResolver.Create(
+            global::MessagePack.Resolvers.CompositeResolver.Create(
                 global::GameKernel.MessagePack.GameKernelResolver.Shared,
                 global::MessagePack.Resolvers.StandardResolver.Instance));
 

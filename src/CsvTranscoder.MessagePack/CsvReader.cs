@@ -546,6 +546,34 @@ public ref struct CsvReader
         return temp[0];
     }
 
+    /// <summary>
+    /// Returns <see langword="true"/> if the next field is empty (i.e., zero-length value),
+    /// without consuming any data from the reader.
+    /// Handles both unquoted empty fields (adjacent separators or end-of-row) and
+    /// quoted empty fields (<c>""</c>).
+    /// </summary>
+    public bool IsNextFieldEmpty()
+    {
+        if (_reader.End) return true;
+        if (!_reader.TryPeek(out var b)) return true;
+
+        // Unquoted empty field: the very next byte is a separator or the start of a newline.
+        if (b == _separator) return true;
+        var newLineSpan = _newLine.Span;
+        if (newLineSpan.Length > 0 && b == newLineSpan[0]) return true;
+
+        // Quoted empty field: "".
+        if (b == (byte)'"' && _options.Quote != Quote.None)
+        {
+            if (_reader.TryPeek(1, out var second))
+            {
+                return second == (byte)'"';
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Reads the current field and returns it as a UTF-8 decoded <see cref="string"/>.</summary>
     public string ReadString()
     {

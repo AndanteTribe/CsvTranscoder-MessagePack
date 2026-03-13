@@ -1,0 +1,503 @@
+using System.Buffers;
+using System.Text;
+using AndanteTribe.Csv;
+using AndanteTribe.Csv.Formatters;
+using MessagePack;
+
+namespace CsvTranscoder.MessagePack.Tests;
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Helpers
+// ═══════════════════════════════════════════════════════════════════════
+
+file static class FormatterTestHelper
+{
+    public static CsvReader CreateReader(string csv, CsvTranscodeOptions options)
+    {
+        var bytes = Encoding.UTF8.GetBytes(csv);
+        return new CsvReader(new ReadOnlySequence<byte>(bytes), options);
+    }
+
+    public static CsvTranscodeOptions SimpleOptions => new()
+    {
+        HasHeader = false,
+        AllowColumnComments = false,
+        AllowRowComments = false,
+        NewLine = "\n",
+        Separator = ','
+    };
+
+    public static T Transcode<T>(string csvField, ICsvFormatter<T> formatter, CsvTranscodeOptions? options = null)
+    {
+        var opts = options ?? SimpleOptions;
+        var reader = CreateReader(csvField + "\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        formatter.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        return MessagePackSerializer.Deserialize<T>(buffer.WrittenMemory);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Primitive formatters
+// ═══════════════════════════════════════════════════════════════════════
+
+public class BooleanFormatterTests
+{
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    [InlineData("True", true)]
+    [InlineData("1", true)]
+    [InlineData("0", false)]
+    public void BooleanFormatter_Roundtrip(string input, bool expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, BooleanFormatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class ByteFormatterTests
+{
+    [Theory]
+    [InlineData("0", (byte)0)]
+    [InlineData("255", (byte)255)]
+    [InlineData("128", (byte)128)]
+    public void ByteFormatter_Roundtrip(string input, byte expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, ByteFormatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class SByteFormatterTests
+{
+    [Theory]
+    [InlineData("-128", (sbyte)-128)]
+    [InlineData("0", (sbyte)0)]
+    [InlineData("127", (sbyte)127)]
+    public void SByteFormatter_Roundtrip(string input, sbyte expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, SByteFormatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class Int16FormatterTests
+{
+    [Theory]
+    [InlineData("-32768", (short)-32768)]
+    [InlineData("0", (short)0)]
+    [InlineData("32767", (short)32767)]
+    public void Int16Formatter_Roundtrip(string input, short expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, Int16Formatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class UInt16FormatterTests
+{
+    [Theory]
+    [InlineData("0", (ushort)0)]
+    [InlineData("65535", (ushort)65535)]
+    public void UInt16Formatter_Roundtrip(string input, ushort expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, UInt16Formatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class Int32FormatterTests
+{
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("-2147483648", int.MinValue)]
+    [InlineData("2147483647", int.MaxValue)]
+    [InlineData("42", 42)]
+    public void Int32Formatter_Roundtrip(string input, int expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, Int32Formatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class UInt32FormatterTests
+{
+    [Theory]
+    [InlineData("0", 0u)]
+    [InlineData("4294967295", uint.MaxValue)]
+    public void UInt32Formatter_Roundtrip(string input, uint expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, UInt32Formatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class Int64FormatterTests
+{
+    [Theory]
+    [InlineData("0", 0L)]
+    [InlineData("-9223372036854775808", long.MinValue)]
+    [InlineData("9223372036854775807", long.MaxValue)]
+    public void Int64Formatter_Roundtrip(string input, long expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, Int64Formatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class UInt64FormatterTests
+{
+    [Theory]
+    [InlineData("0", 0UL)]
+    [InlineData("18446744073709551615", ulong.MaxValue)]
+    public void UInt64Formatter_Roundtrip(string input, ulong expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, UInt64Formatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class SingleFormatterTests
+{
+    [Theory]
+    [InlineData("0", 0f)]
+    [InlineData("3.14", 3.14f)]
+    [InlineData("-1.5", -1.5f)]
+    public void SingleFormatter_Roundtrip(string input, float expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, SingleFormatter.Instance);
+        Assert.Equal(expected, result, 5);
+    }
+}
+
+public class DoubleFormatterTests
+{
+    [Theory]
+    [InlineData("0", 0.0)]
+    [InlineData("3.14159265358979", 3.14159265358979)]
+    [InlineData("-99.9", -99.9)]
+    public void DoubleFormatter_Roundtrip(string input, double expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, DoubleFormatter.Instance);
+        Assert.Equal(expected, result, 5);
+    }
+}
+
+public class DecimalFormatterTests
+{
+    [Fact]
+    public void DecimalFormatter_Roundtrip_Zero()
+    {
+        var result = FormatterTestHelper.Transcode("0", DecimalFormatter.Instance);
+        Assert.Equal(0m, result);
+    }
+
+    [Fact]
+    public void DecimalFormatter_Roundtrip_Value()
+    {
+        var result = FormatterTestHelper.Transcode("123.456", DecimalFormatter.Instance);
+        Assert.Equal(123.456m, result);
+    }
+}
+
+public class CharFormatterTests
+{
+    [Theory]
+    [InlineData("A", 'A')]
+    [InlineData("z", 'z')]
+    [InlineData("0", '0')]
+    public void CharFormatter_Roundtrip(string input, char expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, CharFormatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+public class StringFormatterTests
+{
+    [Theory]
+    [InlineData("hello", "hello")]
+    [InlineData("", "")]
+    [InlineData("日本語", "日本語")]
+    public void StringFormatter_Roundtrip(string input, string expected)
+    {
+        var result = FormatterTestHelper.Transcode(input, StringFormatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DateTime formatter
+// ═══════════════════════════════════════════════════════════════════════
+
+public class DateTimeFormatterTests
+{
+    [Fact]
+    public void DateTimeFormatter_ISO8601_Roundtrip()
+    {
+        var expected = new DateTime(2024, 6, 15, 12, 30, 0, DateTimeKind.Utc);
+        var result = FormatterTestHelper.Transcode("2024-06-15T12:30:00.0000000Z", DateTimeFormatter.Instance);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void DateTimeFormatter_YearMonthDay_Roundtrip()
+    {
+        var expected = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        var result = FormatterTestHelper.Transcode("2024/01/01", DateTimeFormatter.Instance);
+        Assert.Equal(expected, result);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  TimeSpan formatter
+// ═══════════════════════════════════════════════════════════════════════
+
+public class TimeSpanFormatterTests
+{
+    [Fact]
+    public void TimeSpanFormatter_Roundtrip_Hours()
+    {
+        var expected = TimeSpan.FromHours(1.5);
+        var result = FormatterTestHelper.Transcode("01:30:00", TimeSpanFormatter.Instance);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void TimeSpanFormatter_Roundtrip_Zero()
+    {
+        var result = FormatterTestHelper.Transcode("00:00:00", TimeSpanFormatter.Instance);
+        Assert.Equal(TimeSpan.Zero, result);
+    }
+
+    [Fact]
+    public void TimeSpanFormatter_EmptyField_WritesNil()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        TimeSpanFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
+        Assert.True(msgpackReader.TryReadNil());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Guid formatter
+// ═══════════════════════════════════════════════════════════════════════
+
+public class GuidFormatterTests
+{
+    [Fact]
+    public void GuidFormatter_Roundtrip()
+    {
+        var expected = Guid.Parse("12345678-1234-1234-1234-123456789012");
+        var result = FormatterTestHelper.Transcode("12345678-1234-1234-1234-123456789012", GuidFormatter.Instance);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void GuidFormatter_EmptyField_WritesNil()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        GuidFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
+        Assert.True(msgpackReader.TryReadNil());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Enum formatter
+// ═══════════════════════════════════════════════════════════════════════
+
+file enum SampleStatus { Unknown = 0, Active = 1, Inactive = 2 }
+
+public class EnumFormatterTests
+{
+    [Theory]
+    [InlineData("Active", 1)]
+    [InlineData("Inactive", 2)]
+    [InlineData("Unknown", 0)]
+    public void EnumFormatter_ByName_WritesUnderlyingInt(string input, int expectedInt)
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader(input + "\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        EnumFormatter<SampleStatus>.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<int>(buffer.WrittenMemory);
+        Assert.Equal(expectedInt, result);
+    }
+
+    [Fact]
+    public void EnumFormatter_InvalidName_WritesDefault()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("NonExistent\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        EnumFormatter<SampleStatus>.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<int>(buffer.WrittenMemory);
+        Assert.Equal(0, result);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Nullable formatter
+// ═══════════════════════════════════════════════════════════════════════
+
+public class NullableFormatterTests
+{
+    [Fact]
+    public void NullableFormatter_EmptyField_WritesNil()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        NullableFormatter<int>.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<int?>(buffer.WrittenMemory);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void NullableFormatter_NonEmptyField_WritesValue()
+    {
+        var result = FormatterTestHelper.Transcode<int?>("42", NullableFormatter<int>.Instance);
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void NullableFormatter_SeparatorBetweenFields_WritesNilForEmptyAndValueForNonEmpty()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        // CSV: ",42" — first field empty, second field 42
+        var reader = FormatterTestHelper.CreateReader(",42\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+
+        NullableFormatter<int>.Instance.Transcode(ref writer, ref reader, opts);
+        Int32Formatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+
+        var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
+        Assert.True(msgpackReader.TryReadNil());
+        Assert.Equal(42, msgpackReader.ReadInt32());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  StandardResolver
+// ═══════════════════════════════════════════════════════════════════════
+
+public class StandardResolverTests
+{
+    [Fact]
+    public void StandardResolver_GetFormatter_ReturnsFormatterForPrimitives()
+    {
+        var resolver = StandardResolver.Instance;
+        Assert.NotNull(resolver.GetFormatter<bool>());
+        Assert.NotNull(resolver.GetFormatter<byte>());
+        Assert.NotNull(resolver.GetFormatter<sbyte>());
+        Assert.NotNull(resolver.GetFormatter<short>());
+        Assert.NotNull(resolver.GetFormatter<ushort>());
+        Assert.NotNull(resolver.GetFormatter<int>());
+        Assert.NotNull(resolver.GetFormatter<uint>());
+        Assert.NotNull(resolver.GetFormatter<long>());
+        Assert.NotNull(resolver.GetFormatter<ulong>());
+        Assert.NotNull(resolver.GetFormatter<float>());
+        Assert.NotNull(resolver.GetFormatter<double>());
+        Assert.NotNull(resolver.GetFormatter<decimal>());
+        Assert.NotNull(resolver.GetFormatter<char>());
+        Assert.NotNull(resolver.GetFormatter<string>());
+        Assert.NotNull(resolver.GetFormatter<DateTime>());
+        Assert.NotNull(resolver.GetFormatter<TimeSpan>());
+        Assert.NotNull(resolver.GetFormatter<Guid>());
+    }
+
+    [Fact]
+    public void StandardResolver_GetFormatter_ReturnsFormatterForEnum()
+    {
+        var resolver = StandardResolver.Instance;
+        Assert.NotNull(resolver.GetFormatter<SampleStatus>());
+    }
+
+    [Fact]
+    public void StandardResolver_GetFormatter_ReturnsFormatterForNullable()
+    {
+        var resolver = StandardResolver.Instance;
+        Assert.NotNull(resolver.GetFormatter<int?>());
+        Assert.NotNull(resolver.GetFormatter<DateTime?>());
+    }
+
+    [Fact]
+    public void StandardResolver_GetFormatter_ReturnsNullForUnknownType()
+    {
+        var resolver = StandardResolver.Instance;
+        Assert.Null(resolver.GetFormatter<object>());
+    }
+
+    [Fact]
+    public void CsvTranscodeOptions_DefaultResolver_IsStandardResolver()
+    {
+        var opts = new CsvTranscodeOptions();
+        Assert.Same(StandardResolver.Instance, opts.Resolver);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  IsNextFieldEmpty
+// ═══════════════════════════════════════════════════════════════════════
+
+public class IsNextFieldEmptyTests
+{
+    private static CsvTranscodeOptions Opts => new()
+    {
+        HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
+        NewLine = "\n", Separator = ','
+    };
+
+    [Fact]
+    public void IsNextFieldEmpty_EmptyField_ReturnsTrue()
+    {
+        var reader = FormatterTestHelper.CreateReader(",\n", Opts);
+        Assert.True(reader.IsNextFieldEmpty());
+    }
+
+    [Fact]
+    public void IsNextFieldEmpty_NonEmptyField_ReturnsFalse()
+    {
+        var reader = FormatterTestHelper.CreateReader("42,\n", Opts);
+        Assert.False(reader.IsNextFieldEmpty());
+    }
+
+    [Fact]
+    public void IsNextFieldEmpty_EndOfData_ReturnsTrue()
+    {
+        // Reader consumed all data
+        var reader = FormatterTestHelper.CreateReader("1\n", Opts);
+        reader.ReadInt32();
+        Assert.True(reader.IsNextFieldEmpty());
+    }
+
+    [Fact]
+    public void IsNextFieldEmpty_EmptyLastField_ReturnsTrue()
+    {
+        // CSV: "1," — after reading "1", the next field is empty
+        var reader = FormatterTestHelper.CreateReader("1,\n", Opts);
+        reader.ReadInt32(); // reads "1" and advances past separator
+        Assert.True(reader.IsNextFieldEmpty());
+    }
+}

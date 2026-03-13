@@ -8,7 +8,7 @@ public record CsvTranscodeOptions
     public string NewLine { get; init; } = System.Environment.NewLine;
     public char Separator { get; init; } = ',';
     public Quote Quote { get; init; } = Quote.Minimal;
-    public ICsvFormatterResolver Resolver { get; init; }
+    public ICsvFormatterResolver Resolver { get; init; } = StandardResolver.Instance;
 }
 
 public enum Quote : byte

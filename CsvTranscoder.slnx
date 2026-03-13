@@ -4,6 +4,4 @@
   <Project Path="src/CsvTranscoder.MessagePack.GameKernel/CsvTranscoder.MessagePack.GameKernel.csproj" />
   <Project Path="src/CsvTranscoder.MessagePack.Localization/CsvTranscoder.MessagePack.Localization.csproj" />
   <Project Path="tests/CsvTranscoder.MessagePack.Tests/CsvTranscoder.MessagePack.Tests.csproj" />
-  <Project Path="tests/CsvTranscoder.MessagePack.GameKernel.Tests/CsvTranscoder.MessagePack.GameKernel.Tests.csproj" />
-  <Project Path="tests/CsvTranscoder.MessagePack.Localization.Tests/CsvTranscoder.MessagePack.Localization.Tests.csproj" />
 </Solution>

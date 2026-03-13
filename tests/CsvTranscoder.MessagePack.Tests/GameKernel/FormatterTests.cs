@@ -5,7 +5,7 @@ using AndanteTribe.Csv.Formatters;
 using GameKernel;
 using MessagePack;
 
-namespace CsvTranscoder.MessagePack.GameKernel.Tests;
+namespace CsvTranscoder.MessagePack.Tests.GameKernel;
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Test enum

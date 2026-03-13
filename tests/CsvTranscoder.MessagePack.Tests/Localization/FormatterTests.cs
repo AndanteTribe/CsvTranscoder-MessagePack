@@ -6,7 +6,7 @@ using Localization;
 using MessagePack;
 using MessagePack.Resolvers;
 
-namespace CsvTranscoder.MessagePack.Localization.Tests;
+namespace CsvTranscoder.MessagePack.Tests.Localization;
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Helpers

@@ -121,34 +121,29 @@ public static class CsvTranscoder
     #region ref CsvReader inputs
 
     /// <summary>Transcodes CSV data from <paramref name="reader"/> to MessagePack, writing the result to <paramref name="writer"/>.</summary>
-    public static void ToMessagePack<T>(ref CsvReader reader, IBufferWriter<byte> writer, CsvTranscodeOptions? options = null)
+    public static void ToMessagePack<T>(ref CsvReader reader, IBufferWriter<byte> writer)
     {
         ArgumentNullException.ThrowIfNull(writer);
-        var opts = options ?? reader.Options;
         var msgWriter = new MessagePackWriter(writer);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        TranscodeCore<T>(ref reader, ref msgWriter, reader.Options);
         msgWriter.Flush();
     }
 
     /// <summary>Transcodes CSV data from <paramref name="reader"/> to MessagePack, writing the result via <paramref name="writer"/>.</summary>
-    public static void ToMessagePack<T>(ref CsvReader reader, ref MessagePackWriter writer, CsvTranscodeOptions? options = null)
-    {
-        var opts = options ?? reader.Options;
-        TranscodeCore<T>(ref reader, ref writer, opts);
-    }
+    public static void ToMessagePack<T>(ref CsvReader reader, ref MessagePackWriter writer)
+        => TranscodeCore<T>(ref reader, ref writer, reader.Options);
 
     /// <summary>Transcodes CSV data from <paramref name="reader"/> to MessagePack, writing the result to <paramref name="stream"/>.</summary>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException"><paramref name="stream"/> is not writable.</exception>
-    public static void ToMessagePack<T>(ref CsvReader reader, Stream stream, CsvTranscodeOptions? options = null)
+    public static void ToMessagePack<T>(ref CsvReader reader, Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
         if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
 
-        var opts = options ?? reader.Options;
         using var buffer = new ByteBufferWriter();
         var msgWriter = new MessagePackWriter(buffer);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        TranscodeCore<T>(ref reader, ref msgWriter, reader.Options);
         msgWriter.Flush();
         stream.Write(buffer.WrittenSpan);
     }
@@ -165,15 +160,14 @@ public static class CsvTranscoder
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException"><paramref name="stream"/> is not writable.</exception>
-    public static ValueTask ToMessagePackAsync<T>(ref CsvReader reader, Stream stream, CsvTranscodeOptions? options = null, CancellationToken cancellationToken = default)
+    public static ValueTask ToMessagePackAsync<T>(ref CsvReader reader, Stream stream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
         if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
 
-        var opts = options ?? reader.Options;
         var buffer = new ByteBufferWriter();
         var msgWriter = new MessagePackWriter(buffer);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        TranscodeCore<T>(ref reader, ref msgWriter, reader.Options);
         msgWriter.Flush();
         return WriteAndDisposeAsync(buffer, stream, cancellationToken);
     }

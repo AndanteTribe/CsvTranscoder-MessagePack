@@ -39,7 +39,12 @@ internal sealed class ByteBufferWriter : IBufferWriter<byte>, IDisposable
         _index = 0;
     }
 
-    public void Advance(int count) => _index += count;
+    public void Advance(int count)
+    {
+        ObjectDisposedException.ThrowIf(_buffer is null, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        _index += count;
+    }
 
     public Memory<byte> GetMemory(int sizeHint = 0)
     {

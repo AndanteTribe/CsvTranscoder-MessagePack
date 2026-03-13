@@ -27,7 +27,11 @@ public sealed class MasterIdCsvFormatter<TGroup> : ICsvFormatter<MasterId<TGroup
         var groupSpan = str.AsSpan(0, dotIndex);
         var idSpan = str.AsSpan(dotIndex + 1);
 
+#if NET6_0_OR_GREATER
         if (!Enum.TryParse<TGroup>(groupSpan, ignoreCase: true, out var group))
+#else
+        if (!Enum.TryParse<TGroup>(groupSpan.ToString(), ignoreCase: true, out var group))
+#endif
         {
             throw new FormatException($"Cannot parse '{groupSpan}' as {typeof(TGroup).Name}.");
         }

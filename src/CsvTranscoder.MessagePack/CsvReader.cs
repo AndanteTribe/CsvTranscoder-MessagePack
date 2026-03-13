@@ -120,7 +120,7 @@ public ref struct CsvReader
             // Fast path for single-byte newlines (e.g. '\n').
             if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: true))
             {
-                _reader.AdvanceToEnd();
+                _reader.Advance(_reader.Remaining);
             }
 
             return;
@@ -131,7 +131,7 @@ public ref struct CsvReader
         {
             if (!_reader.TryAdvanceTo(newLine[0], advancePastDelimiter: false))
             {
-                _reader.AdvanceToEnd();
+                _reader.Advance(_reader.Remaining);
                 return;
             }
 
@@ -230,7 +230,11 @@ public ref struct CsvReader
         // Fast path for single-byte newlines (e.g. '\n').
         if (newLine.Length == 1)
         {
+#if NET5_0_OR_GREATER
             var terminators = (Span<byte>)stackalloc byte[] { _separator, newLine[0] };
+#else
+            ReadOnlySpan<byte> terminators = new byte[] { _separator, newLine[0] };
+#endif
             if (_reader.TryReadToAny(out field, terminators, advancePastDelimiter: false))
             {
                 // Consume the separator if that is what we stopped at; leave a newline for TryAdvanceToNextRow.
@@ -239,8 +243,8 @@ public ref struct CsvReader
             }
 
             // No terminator — read to end of sequence.
-            field = _reader.UnreadSequence;
-            _reader.AdvanceToEnd();
+            field = _reader.Sequence.Slice(_reader.Position);
+            _reader.Advance(_reader.Remaining);
             return true;
         }
 
@@ -248,7 +252,11 @@ public ref struct CsvReader
         // We track where the field started so that a Sequence.Slice captures all data including
         // any bare occurrences of the first newline byte that turned out not to be a real newline.
         var start = _reader.Position;
+#if NET5_0_OR_GREATER
         var firstByteTerminators = (Span<byte>)[_separator, newLine[0]];
+#else
+        ReadOnlySpan<byte> firstByteTerminators = new byte[] { _separator, newLine[0] };
+#endif
 
         while (true)
         {
@@ -256,7 +264,7 @@ public ref struct CsvReader
             {
                 // No separator or newline first-byte found; the rest of the data is all field content.
                 field = _reader.Sequence.Slice(start);
-                _reader.AdvanceToEnd();
+                _reader.Advance(_reader.Remaining);
                 return true;
             }
 
@@ -289,8 +297,8 @@ public ref struct CsvReader
         if (!_reader.TryReadTo(out field, (byte)'"', advancePastDelimiter: true))
         {
             // Malformed — no closing quote; treat rest as field value.
-            field = _reader.UnreadSequence;
-            _reader.AdvanceToEnd();
+            field = _reader.Sequence.Slice(_reader.Position);
+            _reader.Advance(_reader.Remaining);
             return true;
         }
 
@@ -544,10 +552,18 @@ public ref struct CsvReader
         // Quoted empty field: "".
         if (b == (byte)'"' && _options.Quote != Quote.None)
         {
+#if NET5_0_OR_GREATER
             if (_reader.TryPeek(1, out var second))
             {
                 return second == (byte)'"';
             }
+#else
+            var remaining = _reader.Sequence.Slice(_reader.Position);
+            if (remaining.Length >= 2)
+            {
+                return remaining.Slice(1, 1).FirstSpan[0] == (byte)'"';
+            }
+#endif
         }
 
         return false;

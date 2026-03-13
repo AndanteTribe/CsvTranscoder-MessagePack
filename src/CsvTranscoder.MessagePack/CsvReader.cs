@@ -496,41 +496,6 @@ public ref struct CsvReader
         return ThrowFormatException<decimal>(span);
     }
 
-    /// <summary>Reads the current field and parses it as <see cref="DateTime"/>.</summary>
-    /// <remarks>
-    /// Parsing is attempted with <see cref="System.Buffers.Text.Utf8Parser.TryParse"/> using the
-    /// ISO 8601 (<c>'O'</c>) and RFC 1123 (<c>'R'</c>) formats first. If those fail, the field is
-    /// decoded as a UTF-8 string and parsed with
-    /// <see cref="DateTime.TryParse(string, System.IFormatProvider, System.Globalization.DateTimeStyles, out DateTime)"/>
-    /// using the invariant culture, supporting a broader set of locale-neutral date/time strings.
-    /// </remarks>
-    public DateTime ReadDateTime()
-    {
-        TryReadField(out var field);
-        using var owner = new FieldSpanOwner(in field, stackalloc byte[64]);
-        var span = owner.Span;
-
-        if (Utf8Parser.TryParse(span, out DateTime value, out _, standardFormat: 'O'))
-        {
-            return value;
-        }
-
-        if (Utf8Parser.TryParse(span, out value, out _, standardFormat: 'R'))
-        {
-            return value;
-        }
-
-        // Fall back to string parsing for formats not handled by Utf8Parser (e.g. "yyyy/MM/dd HH:mm:ss").
-        var text = (Span<char>)stackalloc char[Encoding.UTF8.GetCharCount(span)];
-        Encoding.UTF8.TryGetChars(span, text, out _);
-        if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out value))
-        {
-            return value;
-        }
-
-        return ThrowFormatException<DateTime>(span);
-    }
-
     /// <summary>Reads the current field and returns the first <see cref="char"/> of its UTF-8 decoded value.</summary>
     public char ReadChar()
     {
@@ -593,60 +558,14 @@ public ref struct CsvReader
     }
 
     /// <summary>
-    /// Reads the current field and decodes its UTF-8 bytes as UTF-16 characters.
-    /// When the decoded characters fit in <paramref name="buffer"/>, they are written there and
-    /// <see langword="null"/> is returned (no allocation). When the field is too large for
-    /// <paramref name="buffer"/>, a newly allocated <see cref="string"/> is returned instead.
-    /// In both cases <paramref name="charsWritten"/> is set to the character count.
+    /// Reads the current field and returns the raw UTF-8 bytes without any decoding.
+    /// The caller is responsible for interpreting the byte sequence (e.g. using
+    /// <see cref="System.Buffers.Text.Utf8Parser"/> or <see cref="Encoding.UTF8"/>).
     /// </summary>
-    /// <param name="buffer">Caller-provided stack buffer for small fields.</param>
-    /// <param name="charsWritten">Number of characters in the decoded field (0 when the field is empty).</param>
-    /// <returns>
-    /// <see langword="null"/> when the decoded field fits in <paramref name="buffer"/>;
-    /// a <see cref="string"/> containing the entire decoded field otherwise.
-    /// </returns>
-    public string? ReadChars(scoped Span<char> buffer, out int charsWritten)
+    public ReadOnlySequence<byte> ReadRaw()
     {
         TryReadField(out var field);
-
-        if (field.IsEmpty)
-        {
-            charsWritten = 0;
-            return null;
-        }
-
-        ReadOnlySpan<byte> bytes;
-
-        if (field.IsSingleSegment)
-        {
-            bytes = field.FirstSpan;
-        }
-        else
-        {
-            // Multi-segment: fall back to string allocation to avoid a temporary byte array.
-            var str = Encoding.UTF8.GetString(field.ToArray());
-            charsWritten = str.Length;
-            return str;
-        }
-
-        var maxCharCount = Encoding.UTF8.GetMaxCharCount(bytes.Length);
-        if (maxCharCount <= buffer.Length)
-        {
-            if (Encoding.UTF8.TryGetChars(bytes, buffer, out charsWritten))
-            {
-                return null;
-            }
-
-            // TryGetChars unexpectedly failed; fall back to a string (should not happen in practice).
-            var fallback = Encoding.UTF8.GetString(bytes);
-            charsWritten = fallback.Length;
-            return fallback;
-        }
-
-        // Field too large for the caller's buffer — allocate a string.
-        var overflow = Encoding.UTF8.GetString(bytes);
-        charsWritten = overflow.Length;
-        return overflow;
+        return field;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -667,7 +586,7 @@ public ref struct CsvReader
 /// for small multi-segment sequences and a pooled array for larger ones.
 /// Must be disposed to return any pooled array to <see cref="ArrayPool{T}.Shared"/>.
 /// </summary>
-file ref struct FieldSpanOwner
+internal ref struct FieldSpanOwner
 {
     private byte[]? _rented;
 

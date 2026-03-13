@@ -293,66 +293,6 @@ public class ReadDecimalTests
     }
 }
 
-public class ReadDateTimeTests
-{
-    private static CsvTranscodeOptions Opts => new()
-    {
-        HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
-        NewLine = "\n", Separator = ','
-    };
-
-    [Fact]
-    public void ReadDateTime_Iso8601_RoundTrip()
-    {
-        var expected = new DateTime(2024, 6, 15, 12, 30, 0, DateTimeKind.Utc);
-        var iso = expected.ToString("O");
-        var reader = CsvReaderFactory.Create(iso + "\n", Opts);
-        Assert.Equal(expected, reader.ReadDateTime().ToUniversalTime());
-    }
-
-    [Fact]
-    public void ReadDateTime_DateOnly_InvariantFormat()
-    {
-        var reader = CsvReaderFactory.Create("2024-06-15\n", Opts);
-        var result = reader.ReadDateTime();
-        Assert.Equal(new DateTime(2024, 6, 15), result.Date);
-    }
-
-    [Fact]
-    public void ReadDateTime_DateTimeWithTime_InvariantFormat()
-    {
-        var reader = CsvReaderFactory.Create("2024-06-15 12:30:00\n", Opts);
-        var result = reader.ReadDateTime();
-        Assert.Equal(new DateTime(2024, 6, 15, 12, 30, 0), result);
-    }
-
-    [Fact]
-    public void ReadDateTime_SlashSeparated_InvariantFormat()
-    {
-        var reader = CsvReaderFactory.Create("2024/06/15\n", Opts);
-        var result = reader.ReadDateTime();
-        Assert.Equal(new DateTime(2024, 6, 15), result.Date);
-    }
-
-    [Fact]
-    public void ReadDateTime_InvalidValue_ThrowsFormatException()
-    {
-        var reader = CsvReaderFactory.Create("not-a-date\n", Opts);
-        // CsvReader is a ref struct and cannot be captured in a lambda,
-        // so we use try/catch instead of Assert.Throws.
-        try { reader.ReadDateTime(); Assert.Fail("Expected FormatException"); }
-        catch (FormatException) { }
-    }
-
-    [Fact]
-    public void ReadDateTime_MultipleFieldsOnRow()
-    {
-        var reader = CsvReaderFactory.Create("2024-01-01,2025-12-31\n", Opts);
-        Assert.Equal(new DateTime(2024, 1, 1), reader.ReadDateTime().Date);
-        Assert.Equal(new DateTime(2025, 12, 31), reader.ReadDateTime().Date);
-    }
-}
-
 public class ReadCharTests
 {
     private static CsvTranscodeOptions Opts => new()
@@ -427,6 +367,49 @@ public class ReadStringTests
     {
         var reader = CsvReaderFactory.Create("only", Opts);
         Assert.Equal("only", reader.ReadString());
+    }
+}
+
+public class ReadRawTests
+{
+    private static CsvTranscodeOptions Opts => new()
+    {
+        HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
+        NewLine = "\n", Separator = ','
+    };
+
+    [Fact]
+    public void ReadRaw_SimpleField_ReturnsUtf8Bytes()
+    {
+        var reader = CsvReaderFactory.Create("hello\n", Opts);
+        var raw = reader.ReadRaw();
+        Assert.Equal(System.Text.Encoding.UTF8.GetBytes("hello"), raw.ToArray());
+    }
+
+    [Fact]
+    public void ReadRaw_EmptyField_ReturnsEmptySequence()
+    {
+        var reader = CsvReaderFactory.Create(",second\n", Opts);
+        var raw = reader.ReadRaw();
+        Assert.True(raw.IsEmpty);
+    }
+
+    [Fact]
+    public void ReadRaw_MultipleFields_AdvancesPastSeparator()
+    {
+        var reader = CsvReaderFactory.Create("foo,bar\n", Opts);
+        var first = reader.ReadRaw();
+        var second = reader.ReadRaw();
+        Assert.Equal("foo", System.Text.Encoding.UTF8.GetString(first.ToArray()));
+        Assert.Equal("bar", System.Text.Encoding.UTF8.GetString(second.ToArray()));
+    }
+
+    [Fact]
+    public void ReadRaw_UnicodeField_ReturnsCorrectUtf8Bytes()
+    {
+        var reader = CsvReaderFactory.Create("こんにちは\n", Opts);
+        var raw = reader.ReadRaw();
+        Assert.Equal(System.Text.Encoding.UTF8.GetBytes("こんにちは"), raw.ToArray());
     }
 }
 

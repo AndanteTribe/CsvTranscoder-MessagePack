@@ -109,6 +109,7 @@ public static class CsvTranscoder
         ArgumentNullException.ThrowIfNull(stream);
         if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
 
+        cancellationToken.ThrowIfCancellationRequested();
         var opts = options ?? new CsvTranscodeOptions();
         using var buffer = new ByteBufferWriter();
         var msgWriter = new MessagePackWriter(buffer);
@@ -167,6 +168,7 @@ public static class CsvTranscoder
         ArgumentNullException.ThrowIfNull(stream);
         if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
 
+        cancellationToken.ThrowIfCancellationRequested();
         var buffer = new ByteBufferWriter();
         var msgWriter = new MessagePackWriter(buffer);
         TranscodeCore<T>(ref reader, ref msgWriter);

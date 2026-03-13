@@ -6,43 +6,86 @@ namespace CsvTranscoder.MessagePack.Tests;
 public class CompositeResolverTests
 {
     [Fact]
-    public void Create_WithSingleResolver_ReturnsFormatterFromThatResolver()
+    public void Create2_ReturnsFormatterFromFirstMatchingResolver()
     {
-        var resolver = CompositeResolver.Create(StandardResolver.Instance);
+        var r1 = new SingleFormatterResolver<string>(StringFormatter.Instance);
+        var resolver = CompositeResolver.Create(r1, StandardResolver.Instance);
 
-        var formatter = resolver.GetFormatter<int>();
-
-        Assert.NotNull(formatter);
+        Assert.NotNull(resolver.GetFormatter<string>());
+        Assert.NotNull(resolver.GetFormatter<int>());
     }
 
     [Fact]
-    public void Create_WithMultipleResolvers_ReturnsFormatterFromFirstMatchingResolver()
+    public void Create2_ReturnsNullWhenNoResolverSupportsType()
     {
-        // Arrange: a resolver that only handles string, and the standard resolver
-        var stringOnlyResolver = new SingleFormatterResolver<string>(StringFormatter.Instance);
-        var resolver = CompositeResolver.Create(stringOnlyResolver, StandardResolver.Instance);
+        var r1 = new SingleFormatterResolver<string>(StringFormatter.Instance);
+        var r2 = new SingleFormatterResolver<int>(Int32Formatter.Instance);
+        var resolver = CompositeResolver.Create(r1, r2);
 
-        // string comes from the first resolver, int from the second
-        var stringFormatter = resolver.GetFormatter<string>();
-        var intFormatter = resolver.GetFormatter<int>();
+        Assert.Null(resolver.GetFormatter<bool>());
+    }
 
-        Assert.NotNull(stringFormatter);
-        Assert.NotNull(intFormatter);
+    [Fact]
+    public void Create3_ReturnsFormatterFromFirstMatchingResolver()
+    {
+        var r1 = new SingleFormatterResolver<string>(StringFormatter.Instance);
+        var r2 = new SingleFormatterResolver<int>(Int32Formatter.Instance);
+        var resolver = CompositeResolver.Create(r1, r2, StandardResolver.Instance);
+
+        Assert.NotNull(resolver.GetFormatter<string>());
+        Assert.NotNull(resolver.GetFormatter<int>());
+        Assert.NotNull(resolver.GetFormatter<bool>());
+    }
+
+    [Fact]
+    public void Create4_ReturnsFormatterFromFirstMatchingResolver()
+    {
+        var r1 = new SingleFormatterResolver<string>(StringFormatter.Instance);
+        var r2 = new SingleFormatterResolver<int>(Int32Formatter.Instance);
+        var r3 = new SingleFormatterResolver<bool>(BooleanFormatter.Instance);
+        var resolver = CompositeResolver.Create(r1, r2, r3, StandardResolver.Instance);
+
+        Assert.NotNull(resolver.GetFormatter<string>());
+        Assert.NotNull(resolver.GetFormatter<int>());
+        Assert.NotNull(resolver.GetFormatter<bool>());
+        Assert.NotNull(resolver.GetFormatter<double>());
+    }
+
+    [Fact]
+    public void Create5_ReturnsFormatterFromFirstMatchingResolver()
+    {
+        var r1 = new SingleFormatterResolver<string>(StringFormatter.Instance);
+        var r2 = new SingleFormatterResolver<int>(Int32Formatter.Instance);
+        var r3 = new SingleFormatterResolver<bool>(BooleanFormatter.Instance);
+        var r4 = new SingleFormatterResolver<double>(DoubleFormatter.Instance);
+        var resolver = CompositeResolver.Create(r1, r2, r3, r4, StandardResolver.Instance);
+
+        Assert.NotNull(resolver.GetFormatter<string>());
+        Assert.NotNull(resolver.GetFormatter<int>());
+        Assert.NotNull(resolver.GetFormatter<bool>());
+        Assert.NotNull(resolver.GetFormatter<double>());
+        Assert.NotNull(resolver.GetFormatter<long>());
+    }
+
+    [Fact]
+    public void CreateN_WithSingleResolver_ReturnsFormatterFromThatResolver()
+    {
+        var resolver = CompositeResolver.Create(StandardResolver.Instance);
+
+        Assert.NotNull(resolver.GetFormatter<int>());
     }
 
     [Fact]
     public void Create_FirstResolverTakesPriorityOverSecond()
     {
-        // Arrange: two resolvers both supporting string, the first should win
         var firstFormatter = new CustomStringFormatter("first");
         var secondFormatter = new CustomStringFormatter("second");
         var first = new SingleFormatterResolver<string>(firstFormatter);
         var second = new SingleFormatterResolver<string>(secondFormatter);
 
         var resolver = CompositeResolver.Create(first, second);
-        var formatter = resolver.GetFormatter<string>();
 
-        Assert.Same(firstFormatter, formatter);
+        Assert.Same(firstFormatter, resolver.GetFormatter<string>());
     }
 
     [Fact]
@@ -50,23 +93,19 @@ public class CompositeResolverTests
     {
         var resolver = CompositeResolver.Create(new SingleFormatterResolver<string>(StringFormatter.Instance));
 
-        var formatter = resolver.GetFormatter<int>();
-
-        Assert.Null(formatter);
+        Assert.Null(resolver.GetFormatter<int>());
     }
 
     [Fact]
-    public void Create_WithNoResolvers_ReturnsNull()
+    public void CreateN_WithNoResolvers_ReturnsNull()
     {
         var resolver = CompositeResolver.Create();
 
-        var formatter = resolver.GetFormatter<int>();
-
-        Assert.Null(formatter);
+        Assert.Null(resolver.GetFormatter<int>());
     }
 
     [Fact]
-    public void Create_CachesResultOnSubsequentCalls()
+    public void CreateN_CachesResultOnSubsequentCalls()
     {
         var resolver = CompositeResolver.Create(StandardResolver.Instance);
 
@@ -77,7 +116,7 @@ public class CompositeResolverTests
     }
 
     [Fact]
-    public void Create_ThrowsForNullResolversArgument()
+    public void CreateN_ThrowsForNullResolversArgument()
     {
         Assert.Throws<ArgumentNullException>(() => CompositeResolver.Create(null!));
     }

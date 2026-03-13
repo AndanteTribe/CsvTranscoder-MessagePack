@@ -394,9 +394,9 @@ public class FieldSpanOwnerViaMultiSegmentTests
     [Fact]
     public void MultiSegment_LargeField_UsesPooledArray()
     {
-        // Multi-segment field of 9 bytes total ("not-a-bo" + "ol!\n") exceeds ReadBoolean's
-        // 8-byte stack buffer, so FieldSpanOwner rents from ArrayPool (lines 618-621).
-        // On Dispose, the rented array is returned (lines 627-628).
+        // Multi-segment field of 11 bytes content ("not-a-bo" = 8 bytes, "ol!" = 3 bytes, then "\n").
+        // 11 bytes exceeds ReadBoolean's 8-byte stack buffer, so FieldSpanOwner rents from
+        // ArrayPool (lines 618-621). On Dispose, the rented array is returned (lines 627-628).
         // The value is not a valid boolean, so FormatException is expected.
         // Note: CsvReader and MessagePackWriter are ref structs and cannot be captured in
         // a lambda, so try/catch is used instead of Assert.Throws.

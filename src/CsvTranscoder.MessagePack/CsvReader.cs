@@ -496,41 +496,6 @@ public ref struct CsvReader
         return ThrowFormatException<decimal>(span);
     }
 
-    /// <summary>Reads the current field and parses it as <see cref="DateTime"/>.</summary>
-    /// <remarks>
-    /// Parsing is attempted with <see cref="System.Buffers.Text.Utf8Parser.TryParse"/> using the
-    /// ISO 8601 (<c>'O'</c>) and RFC 1123 (<c>'R'</c>) formats first. If those fail, the field is
-    /// decoded as a UTF-8 string and parsed with
-    /// <see cref="DateTime.TryParse(string, System.IFormatProvider, System.Globalization.DateTimeStyles, out DateTime)"/>
-    /// using the invariant culture, supporting a broader set of locale-neutral date/time strings.
-    /// </remarks>
-    public DateTime ReadDateTime()
-    {
-        TryReadField(out var field);
-        using var owner = new FieldSpanOwner(in field, stackalloc byte[64]);
-        var span = owner.Span;
-
-        if (Utf8Parser.TryParse(span, out DateTime value, out _, standardFormat: 'O'))
-        {
-            return value;
-        }
-
-        if (Utf8Parser.TryParse(span, out value, out _, standardFormat: 'R'))
-        {
-            return value;
-        }
-
-        // Fall back to string parsing for formats not handled by Utf8Parser (e.g. "yyyy/MM/dd HH:mm:ss").
-        var text = (Span<char>)stackalloc char[Encoding.UTF8.GetCharCount(span)];
-        Encoding.UTF8.TryGetChars(span, text, out _);
-        if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out value))
-        {
-            return value;
-        }
-
-        return ThrowFormatException<DateTime>(span);
-    }
-
     /// <summary>Reads the current field and returns the first <see cref="char"/> of its UTF-8 decoded value.</summary>
     public char ReadChar()
     {
@@ -544,6 +509,34 @@ public ref struct CsvReader
         var temp = (Span<char>)stackalloc char[Encoding.UTF8.GetCharCount(field.FirstSpan)];
         Encoding.UTF8.TryGetChars(field.FirstSpan, temp, out _);
         return temp[0];
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the next field is empty (i.e., zero-length value),
+    /// without consuming any data from the reader.
+    /// Handles both unquoted empty fields (adjacent separators or end-of-row) and
+    /// quoted empty fields (<c>""</c>).
+    /// </summary>
+    public bool IsNextFieldEmpty()
+    {
+        if (_reader.End) return true;
+        if (!_reader.TryPeek(out var b)) return true;
+
+        // Unquoted empty field: the very next byte is a separator or the start of a newline.
+        if (b == _separator) return true;
+        var newLineSpan = _newLine.Span;
+        if (newLineSpan.Length > 0 && _reader.IsNext(newLineSpan, advancePast: false)) return true;
+
+        // Quoted empty field: "".
+        if (b == (byte)'"' && _options.Quote != Quote.None)
+        {
+            if (_reader.TryPeek(1, out var second))
+            {
+                return second == (byte)'"';
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Reads the current field and returns it as a UTF-8 decoded <see cref="string"/>.</summary>
@@ -564,6 +557,17 @@ public ref struct CsvReader
         return Encoding.UTF8.GetString(field.ToArray());
     }
 
+    /// <summary>
+    /// Reads the current field and returns the raw UTF-8 bytes without any decoding.
+    /// The caller is responsible for interpreting the byte sequence (e.g. using
+    /// <see cref="System.Buffers.Text.Utf8Parser"/> or <see cref="Encoding.UTF8"/>).
+    /// </summary>
+    public ReadOnlySequence<byte> ReadRaw()
+    {
+        TryReadField(out var field);
+        return field;
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static T ThrowFormatException<T>(ReadOnlySpan<byte> span)
         => throw new FormatException($"Cannot parse '{Encoding.UTF8.GetString(span)}' as {typeof(T).Name}.");
@@ -582,7 +586,7 @@ public ref struct CsvReader
 /// for small multi-segment sequences and a pooled array for larger ones.
 /// Must be disposed to return any pooled array to <see cref="ArrayPool{T}.Shared"/>.
 /// </summary>
-file ref struct FieldSpanOwner
+internal ref struct FieldSpanOwner
 {
     private byte[]? _rented;
 

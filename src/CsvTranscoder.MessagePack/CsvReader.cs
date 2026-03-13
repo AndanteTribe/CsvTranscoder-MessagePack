@@ -14,6 +14,7 @@ public ref struct CsvReader
     private readonly CsvTranscodeOptions _options;
     private readonly ReadOnlyMemory<byte> _newLine;
     private readonly byte _separator;
+    private readonly ReadOnlyMemory<byte> _terminators;
     private ulong _commentColumnMask;
     private int _currentColumn;
 
@@ -33,6 +34,7 @@ public ref struct CsvReader
         _options = options;
         _newLine = Encoding.UTF8.GetBytes(options.NewLine);
         _separator = (byte)options.Separator;
+        _terminators = new byte[] { _separator, _newLine.Span[0] };
     }
 
     /// <summary>
@@ -230,8 +232,7 @@ public ref struct CsvReader
         // Fast path for single-byte newlines (e.g. '\n').
         if (newLine.Length == 1)
         {
-            ReadOnlySpan<byte> terminators = new byte[] { _separator, newLine[0] };
-            if (_reader.TryReadToAny(out field, terminators, advancePastDelimiter: false))
+            if (_reader.TryReadToAny(out field, _terminators.Span, advancePastDelimiter: false))
             {
                 // Consume the separator if that is what we stopped at; leave a newline for TryAdvanceToNextRow.
                 _reader.IsNext(_separator, advancePast: true);
@@ -248,11 +249,9 @@ public ref struct CsvReader
         // We track where the field started so that a Sequence.Slice captures all data including
         // any bare occurrences of the first newline byte that turned out not to be a real newline.
         var start = _reader.Position;
-        ReadOnlySpan<byte> firstByteTerminators = new byte[] { _separator, newLine[0] };
-
         while (true)
         {
-            if (!_reader.TryReadToAny(out ReadOnlySequence<byte> _, firstByteTerminators, advancePastDelimiter: false))
+            if (!_reader.TryReadToAny(out ReadOnlySequence<byte> _, _terminators.Span, advancePastDelimiter: false))
             {
                 // No separator or newline first-byte found; the rest of the data is all field content.
                 field = _reader.Sequence.Slice(start);

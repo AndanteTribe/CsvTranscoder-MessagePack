@@ -230,11 +230,7 @@ public ref struct CsvReader
         // Fast path for single-byte newlines (e.g. '\n').
         if (newLine.Length == 1)
         {
-#if NET5_0_OR_GREATER
-            var terminators = (Span<byte>)stackalloc byte[] { _separator, newLine[0] };
-#else
             ReadOnlySpan<byte> terminators = new byte[] { _separator, newLine[0] };
-#endif
             if (_reader.TryReadToAny(out field, terminators, advancePastDelimiter: false))
             {
                 // Consume the separator if that is what we stopped at; leave a newline for TryAdvanceToNextRow.
@@ -252,11 +248,7 @@ public ref struct CsvReader
         // We track where the field started so that a Sequence.Slice captures all data including
         // any bare occurrences of the first newline byte that turned out not to be a real newline.
         var start = _reader.Position;
-#if NET5_0_OR_GREATER
-        var firstByteTerminators = (Span<byte>)[_separator, newLine[0]];
-#else
         ReadOnlySpan<byte> firstByteTerminators = new byte[] { _separator, newLine[0] };
-#endif
 
         while (true)
         {

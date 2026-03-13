@@ -13,17 +13,20 @@ public sealed class DateTimeOffsetFormatter : ICsvFormatter<DateTimeOffset>
     {
         var field = reader.ReadRaw();
         if (field.IsEmpty)
+        {
             throw new FormatException("Cannot parse empty field as DateTimeOffset.");
+        }
 
         using var owner = new FieldSpanOwner(in field, stackalloc byte[64]);
         var span = owner.Span;
 
         // Use a fixed 64-char stack buffer; rent from ArrayPool for unusually large fields.
-        Span<char> charBuf = stackalloc char[64];
         DateTimeOffset value;
         var charCount = Encoding.UTF8.GetCharCount(span);
-        if (charCount <= 64 && Encoding.UTF8.TryGetChars(span, charBuf, out var written))
+        if (charCount <= 64)
         {
+            var charBuf = (Span<char>)stackalloc char[64];
+            var written = Encoding.UTF8.GetChars(span, charBuf);
             value = DateTimeOffset.Parse(charBuf[..written], CultureInfo.InvariantCulture);
         }
         else
@@ -31,7 +34,7 @@ public sealed class DateTimeOffsetFormatter : ICsvFormatter<DateTimeOffset>
             var pooled = ArrayPool<char>.Shared.Rent(charCount);
             try
             {
-                written = Encoding.UTF8.GetChars(span, pooled);
+                var written = Encoding.UTF8.GetChars(span, pooled);
                 value = DateTimeOffset.Parse(pooled.AsSpan(0, written), CultureInfo.InvariantCulture);
             }
             finally

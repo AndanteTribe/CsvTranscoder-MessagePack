@@ -68,7 +68,10 @@ public static class CsvTranscoder
     /// <summary>Transcodes CSV data in <paramref name="byteSequence"/> to MessagePack, writing the result to <paramref name="writer"/>.</summary>
     public static void ToMessagePack<T>(ReadOnlySequence<byte> byteSequence, IBufferWriter<byte> writer, CsvTranscodeOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(writer);
+        if (writer is null)
+        {
+            throw new ArgumentNullException(nameof(writer));
+        }
         var opts = options ?? new CsvTranscodeOptions();
         var msgWriter = new MessagePackWriter(writer);
         var reader = new CsvReader(byteSequence, opts);
@@ -89,8 +92,14 @@ public static class CsvTranscoder
     /// <exception cref="ArgumentException"><paramref name="stream"/> is not writable.</exception>
     public static void ToMessagePack<T>(ReadOnlySequence<byte> byteSequence, Stream stream, CsvTranscodeOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(stream);
-        if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
+        if (stream is null)
+        {
+            throw new ArgumentNullException(nameof(stream));
+        }
+        if (!stream.CanWrite)
+        {
+            throw new ArgumentException("Stream must be writable.", nameof(stream));
+        }
 
         var opts = options ?? new CsvTranscodeOptions();
         using var buffer = new ByteBufferWriter();
@@ -106,8 +115,14 @@ public static class CsvTranscoder
     /// <exception cref="ArgumentException"><paramref name="stream"/> is not writable.</exception>
     public static async ValueTask ToMessagePackAsync<T>(ReadOnlySequence<byte> byteSequence, Stream stream, CsvTranscodeOptions? options = null, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(stream);
-        if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
+        if (stream is null)
+        {
+            throw new ArgumentNullException(nameof(stream));
+        }
+        if (!stream.CanWrite)
+        {
+            throw new ArgumentException("Stream must be writable.", nameof(stream));
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
         var opts = options ?? new CsvTranscodeOptions();
@@ -126,7 +141,10 @@ public static class CsvTranscoder
     /// <summary>Transcodes CSV data from <paramref name="reader"/> to MessagePack, writing the result to <paramref name="writer"/>.</summary>
     public static void ToMessagePack<T>(ref CsvReader reader, IBufferWriter<byte> writer)
     {
-        ArgumentNullException.ThrowIfNull(writer);
+        if (writer is null)
+        {
+            throw new ArgumentNullException(nameof(writer));
+        }
         var msgWriter = new MessagePackWriter(writer);
         TranscodeCore<T>(ref reader, ref msgWriter);
         msgWriter.Flush();
@@ -141,8 +159,14 @@ public static class CsvTranscoder
     /// <exception cref="ArgumentException"><paramref name="stream"/> is not writable.</exception>
     public static void ToMessagePack<T>(ref CsvReader reader, Stream stream)
     {
-        ArgumentNullException.ThrowIfNull(stream);
-        if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
+        if (stream is null)
+        {
+            throw new ArgumentNullException(nameof(stream));
+        }
+        if (!stream.CanWrite)
+        {
+            throw new ArgumentException("Stream must be writable.", nameof(stream));
+        }
 
         using var buffer = new ByteBufferWriter();
         var msgWriter = new MessagePackWriter(buffer);
@@ -165,8 +189,14 @@ public static class CsvTranscoder
     /// <exception cref="ArgumentException"><paramref name="stream"/> is not writable.</exception>
     public static ValueTask ToMessagePackAsync<T>(ref CsvReader reader, Stream stream, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(stream);
-        if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
+        if (stream is null)
+        {
+            throw new ArgumentNullException(nameof(stream));
+        }
+        if (!stream.CanWrite)
+        {
+            throw new ArgumentException("Stream must be writable.", nameof(stream));
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
         var buffer = new ByteBufferWriter();
@@ -217,9 +247,19 @@ public static class CsvTranscoder
     /// <exception cref="ArgumentException"><paramref name="inputStream"/> is not readable.</exception>
     public static void ToMessagePack<T>(Stream inputStream, IBufferWriter<byte> writer, CsvTranscodeOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(inputStream);
-        if (!inputStream.CanRead) throw new ArgumentException("Stream must be readable.", nameof(inputStream));
-        ArgumentNullException.ThrowIfNull(writer);
+        if (inputStream is null)
+        {
+            throw new ArgumentNullException(nameof(inputStream));
+        }
+        if (!inputStream.CanRead)
+        {
+            throw new ArgumentException("Stream must be readable.", nameof(inputStream));
+        }
+
+        if (writer is null)
+        {
+            throw new ArgumentNullException(nameof(writer));
+        }
 
         var inputBytes = ReadAllBytes(inputStream);
         ToMessagePack<T>(new ReadOnlySequence<byte>(inputBytes), writer, options);
@@ -230,8 +270,14 @@ public static class CsvTranscoder
     /// <exception cref="ArgumentException"><paramref name="inputStream"/> is not readable.</exception>
     public static void ToMessagePack<T>(Stream inputStream, ref MessagePackWriter writer, CsvTranscodeOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(inputStream);
-        if (!inputStream.CanRead) throw new ArgumentException("Stream must be readable.", nameof(inputStream));
+        if (inputStream is null)
+        {
+            throw new ArgumentNullException(nameof(inputStream));
+        }
+        if (!inputStream.CanRead)
+        {
+            throw new ArgumentException("Stream must be readable.", nameof(inputStream));
+        }
 
         var inputBytes = ReadAllBytes(inputStream);
         ToMessagePack<T>(new ReadOnlySequence<byte>(inputBytes), ref writer, options);
@@ -242,10 +288,23 @@ public static class CsvTranscoder
     /// <exception cref="ArgumentException"><paramref name="inputStream"/> is not readable, or <paramref name="outputStream"/> is not writable.</exception>
     public static void ToMessagePack<T>(Stream inputStream, Stream outputStream, CsvTranscodeOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(inputStream);
-        if (!inputStream.CanRead) throw new ArgumentException("Stream must be readable.", nameof(inputStream));
-        ArgumentNullException.ThrowIfNull(outputStream);
-        if (!outputStream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(outputStream));
+        if (inputStream is null)
+        {
+            throw new ArgumentNullException(nameof(inputStream));
+        }
+        if (!inputStream.CanRead)
+        {
+            throw new ArgumentException("Stream must be readable.", nameof(inputStream));
+        }
+
+        if (outputStream is null)
+        {
+            throw new ArgumentNullException(nameof(outputStream));
+        }
+        if (!outputStream.CanWrite)
+        {
+            throw new ArgumentException("Stream must be writable.", nameof(outputStream));
+        }
 
         var inputBytes = ReadAllBytes(inputStream);
         ToMessagePack<T>(new ReadOnlySequence<byte>(inputBytes), outputStream, options);
@@ -256,10 +315,23 @@ public static class CsvTranscoder
     /// <exception cref="ArgumentException"><paramref name="inputStream"/> is not readable, or <paramref name="outputStream"/> is not writable.</exception>
     public static async ValueTask ToMessagePackAsync<T>(Stream inputStream, Stream outputStream, CsvTranscodeOptions? options = null, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(inputStream);
-        if (!inputStream.CanRead) throw new ArgumentException("Stream must be readable.", nameof(inputStream));
-        ArgumentNullException.ThrowIfNull(outputStream);
-        if (!outputStream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(outputStream));
+        if (inputStream is null)
+        {
+            throw new ArgumentNullException(nameof(inputStream));
+        }
+        if (!inputStream.CanRead)
+        {
+            throw new ArgumentException("Stream must be readable.", nameof(inputStream));
+        }
+
+        if (outputStream is null)
+        {
+            throw new ArgumentNullException(nameof(outputStream));
+        }
+        if (!outputStream.CanWrite)
+        {
+            throw new ArgumentException("Stream must be writable.", nameof(outputStream));
+        }
 
         var inputBytes = await ReadAllBytesAsync(inputStream, cancellationToken).ConfigureAwait(false);
         await ToMessagePackAsync<T>(new ReadOnlySequence<byte>(inputBytes), outputStream, options, cancellationToken).ConfigureAwait(false);

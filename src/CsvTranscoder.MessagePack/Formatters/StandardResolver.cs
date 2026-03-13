@@ -75,13 +75,34 @@ public sealed class StandardResolver : ICsvFormatterResolver
 
             var defHandle = def.TypeHandle;
             Type? formatterType = null;
-            if (defHandle.Equals(s_valueTuple1Handle)) formatterType = typeof(ValueTupleFormatter<>);
-            else if (defHandle.Equals(s_valueTuple2Handle)) formatterType = typeof(ValueTupleFormatter<,>);
-            else if (defHandle.Equals(s_valueTuple3Handle)) formatterType = typeof(ValueTupleFormatter<,,>);
-            else if (defHandle.Equals(s_valueTuple4Handle)) formatterType = typeof(ValueTupleFormatter<,,,>);
-            else if (defHandle.Equals(s_valueTuple5Handle)) formatterType = typeof(ValueTupleFormatter<,,,,>);
-            else if (defHandle.Equals(s_valueTuple6Handle)) formatterType = typeof(ValueTupleFormatter<,,,,,>);
-            else if (defHandle.Equals(s_valueTuple7Handle)) formatterType = typeof(ValueTupleFormatter<,,,,,,>);
+            if (defHandle.Equals(s_valueTuple1Handle))
+            {
+                formatterType = typeof(ValueTupleFormatter<>);
+            }
+            else if (defHandle.Equals(s_valueTuple2Handle))
+            {
+                formatterType = typeof(ValueTupleFormatter<,>);
+            }
+            else if (defHandle.Equals(s_valueTuple3Handle))
+            {
+                formatterType = typeof(ValueTupleFormatter<,,>);
+            }
+            else if (defHandle.Equals(s_valueTuple4Handle))
+            {
+                formatterType = typeof(ValueTupleFormatter<,,,>);
+            }
+            else if (defHandle.Equals(s_valueTuple5Handle))
+            {
+                formatterType = typeof(ValueTupleFormatter<,,,,>);
+            }
+            else if (defHandle.Equals(s_valueTuple6Handle))
+            {
+                formatterType = typeof(ValueTupleFormatter<,,,,,>);
+            }
+            else if (defHandle.Equals(s_valueTuple7Handle))
+            {
+                formatterType = typeof(ValueTupleFormatter<,,,,,,>);
+            }
 
             if (formatterType is not null)
             {

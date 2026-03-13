@@ -11,7 +11,9 @@ public sealed class GuidFormatter : ICsvFormatter<Guid>
     {
         var field = reader.ReadRaw();
         if (field.IsEmpty)
+        {
             throw new FormatException("Cannot parse empty field as Guid.");
+        }
 
         using var owner = new FieldSpanOwner(in field, stackalloc byte[40]);
         var span = owner.Span;

@@ -10,8 +10,16 @@ public static class CompositeResolver
         ICsvFormatterResolver resolver1,
         ICsvFormatterResolver resolver2)
     {
-        if (resolver1 is null) throw new ArgumentNullException(nameof(resolver1));
-        if (resolver2 is null) throw new ArgumentNullException(nameof(resolver2));
+        if (resolver1 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver1));
+        }
+
+        if (resolver2 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver2));
+        }
+
         return new Resolver2(resolver1, resolver2);
     }
 
@@ -21,9 +29,21 @@ public static class CompositeResolver
         ICsvFormatterResolver resolver2,
         ICsvFormatterResolver resolver3)
     {
-        if (resolver1 is null) throw new ArgumentNullException(nameof(resolver1));
-        if (resolver2 is null) throw new ArgumentNullException(nameof(resolver2));
-        if (resolver3 is null) throw new ArgumentNullException(nameof(resolver3));
+        if (resolver1 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver1));
+        }
+
+        if (resolver2 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver2));
+        }
+
+        if (resolver3 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver3));
+        }
+
         return new Resolver3(resolver1, resolver2, resolver3);
     }
 
@@ -34,10 +54,26 @@ public static class CompositeResolver
         ICsvFormatterResolver resolver3,
         ICsvFormatterResolver resolver4)
     {
-        if (resolver1 is null) throw new ArgumentNullException(nameof(resolver1));
-        if (resolver2 is null) throw new ArgumentNullException(nameof(resolver2));
-        if (resolver3 is null) throw new ArgumentNullException(nameof(resolver3));
-        if (resolver4 is null) throw new ArgumentNullException(nameof(resolver4));
+        if (resolver1 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver1));
+        }
+
+        if (resolver2 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver2));
+        }
+
+        if (resolver3 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver3));
+        }
+
+        if (resolver4 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver4));
+        }
+
         return new Resolver4(resolver1, resolver2, resolver3, resolver4);
     }
 
@@ -49,11 +85,31 @@ public static class CompositeResolver
         ICsvFormatterResolver resolver4,
         ICsvFormatterResolver resolver5)
     {
-        if (resolver1 is null) throw new ArgumentNullException(nameof(resolver1));
-        if (resolver2 is null) throw new ArgumentNullException(nameof(resolver2));
-        if (resolver3 is null) throw new ArgumentNullException(nameof(resolver3));
-        if (resolver4 is null) throw new ArgumentNullException(nameof(resolver4));
-        if (resolver5 is null) throw new ArgumentNullException(nameof(resolver5));
+        if (resolver1 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver1));
+        }
+
+        if (resolver2 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver2));
+        }
+
+        if (resolver3 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver3));
+        }
+
+        if (resolver4 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver4));
+        }
+
+        if (resolver5 is null)
+        {
+            throw new ArgumentNullException(nameof(resolver5));
+        }
+
         return new Resolver5(resolver1, resolver2, resolver3, resolver4, resolver5);
     }
 
@@ -68,10 +124,17 @@ public static class CompositeResolver
     /// <returns>A single <see cref="ICsvFormatterResolver"/> that delegates to all provided resolvers.</returns>
     public static ICsvFormatterResolver Create(params ICsvFormatterResolver[] resolvers)
     {
-        if (resolvers is null) throw new ArgumentNullException(nameof(resolvers));
+        if (resolvers is null)
+        {
+            throw new ArgumentNullException(nameof(resolvers));
+        }
+
         for (var i = 0; i < resolvers.Length; i++)
         {
-            if (resolvers[i] is null) throw new ArgumentNullException($"{nameof(resolvers)}[{i}]");
+            if (resolvers[i] is null)
+            {
+                throw new ArgumentNullException($"{nameof(resolvers)}[{i}]");
+            }
         }
 
         return new ResolverN(resolvers);
@@ -123,7 +186,9 @@ public static class CompositeResolver
             {
                 var f = resolver.GetFormatter<T>();
                 if (f is not null)
+                {
                     return f;
+                }
             }
 
             return null;

@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.IO;
 using System.Text;
 using AndanteTribe.Csv;
 using MessagePack;
@@ -55,16 +54,16 @@ file static class TranscoderTestHelper
 //  ReadOnlySequence<byte> inputs
 // ═══════════════════════════════════════════════════════════════════════
 
-public class CsvTranscoder_SequenceInput_Tests
+public class CsvTranscoderSequenceInputTests
 {
-    private static readonly CsvTranscodeOptions Opts = TranscoderTestHelper.SimpleOptions;
+    private static readonly CsvTranscodeOptions s_opts = TranscoderTestHelper.SimpleOptions;
 
     [Fact]
     public void ToMessagePack_Sequence_IBufferWriter_ProducesExpectedArray()
     {
         var seq = TranscoderTestHelper.ToSequence("1\n2\n3\n");
         var output = new ArrayBufferWriter<byte>();
-        ToMessagePack<int>(seq, output, Opts);
+        ToMessagePack<int>(seq, output, s_opts);
         Assert.Equal([1, 2, 3], TranscoderTestHelper.Deserialize<int>(output));
     }
 
@@ -73,7 +72,7 @@ public class CsvTranscoder_SequenceInput_Tests
     {
         var seq = TranscoderTestHelper.ToSequence("1\n");
         Assert.Throws<ArgumentNullException>(() =>
-            ToMessagePack<int>(seq, (IBufferWriter<byte>)null!, Opts));
+            ToMessagePack<int>(seq, (IBufferWriter<byte>)null!, s_opts));
     }
 
     [Fact]
@@ -82,7 +81,7 @@ public class CsvTranscoder_SequenceInput_Tests
         var seq = TranscoderTestHelper.ToSequence("10\n20\n");
         var output = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(output);
-        ToMessagePack<int>(seq, ref writer, Opts);
+        ToMessagePack<int>(seq, ref writer, s_opts);
         writer.Flush();
         Assert.Equal([10, 20], TranscoderTestHelper.Deserialize<int>(output));
     }
@@ -92,7 +91,7 @@ public class CsvTranscoder_SequenceInput_Tests
     {
         var seq = TranscoderTestHelper.ToSequence("5\n6\n");
         using var ms = new MemoryStream();
-        ToMessagePack<int>(seq, ms, Opts);
+        ToMessagePack<int>(seq, ms, s_opts);
         Assert.Equal([5, 6], TranscoderTestHelper.Deserialize<int>(ms));
     }
 
@@ -101,7 +100,7 @@ public class CsvTranscoder_SequenceInput_Tests
     {
         var seq = TranscoderTestHelper.ToSequence("1\n");
         Assert.Throws<ArgumentNullException>(() =>
-            ToMessagePack<int>(seq, (Stream)null!, Opts));
+            ToMessagePack<int>(seq, (Stream)null!, s_opts));
     }
 
     [Fact]
@@ -109,7 +108,7 @@ public class CsvTranscoder_SequenceInput_Tests
     {
         var seq = TranscoderTestHelper.ToSequence("1\n");
         using var ms = new MemoryStream(new byte[16], writable: false);
-        Assert.Throws<ArgumentException>(() => ToMessagePack<int>(seq, ms, Opts));
+        Assert.Throws<ArgumentException>(() => ToMessagePack<int>(seq, ms, s_opts));
     }
 
     [Fact]
@@ -117,7 +116,7 @@ public class CsvTranscoder_SequenceInput_Tests
     {
         var seq = TranscoderTestHelper.ToSequence("7\n8\n9\n");
         using var ms = new MemoryStream();
-        await ToMessagePackAsync<int>(seq, ms, Opts);
+        await ToMessagePackAsync<int>(seq, ms, s_opts);
         Assert.Equal([7, 8, 9], TranscoderTestHelper.Deserialize<int>(ms));
     }
 
@@ -126,7 +125,7 @@ public class CsvTranscoder_SequenceInput_Tests
     {
         var seq = TranscoderTestHelper.ToSequence("1\n");
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-            await ToMessagePackAsync<int>(seq, (Stream)null!, Opts));
+            await ToMessagePackAsync<int>(seq, null!, s_opts));
     }
 
     [Fact]
@@ -135,7 +134,7 @@ public class CsvTranscoder_SequenceInput_Tests
         var seq = TranscoderTestHelper.ToSequence("1\n");
         using var ms = new MemoryStream(new byte[16], writable: false);
         await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await ToMessagePackAsync<int>(seq, ms, Opts));
+            await ToMessagePackAsync<int>(seq, ms, s_opts));
     }
 
     [Fact]
@@ -143,7 +142,7 @@ public class CsvTranscoder_SequenceInput_Tests
     {
         var seq = TranscoderTestHelper.ToSequence(string.Empty);
         var output = new ArrayBufferWriter<byte>();
-        ToMessagePack<int>(seq, output, Opts);
+        ToMessagePack<int>(seq, output, s_opts);
         Assert.Empty(TranscoderTestHelper.Deserialize<int>(output));
     }
 
@@ -163,15 +162,15 @@ public class CsvTranscoder_SequenceInput_Tests
 // lambdas, so exception tests use try/catch directly.
 // ═══════════════════════════════════════════════════════════════════════
 
-public class CsvTranscoder_CsvReaderInput_Tests
+public class CsvTranscoderCsvReaderInputTests
 {
-    private static readonly CsvTranscodeOptions Opts = TranscoderTestHelper.SimpleOptions;
+    private static readonly CsvTranscodeOptions s_opts = TranscoderTestHelper.SimpleOptions;
 
     [Fact]
     public void ToMessagePack_Reader_IBufferWriter_ProducesExpectedArray()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("1\n2\n3\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         var output = new ArrayBufferWriter<byte>();
         ToMessagePack<int>(ref reader, output);
         Assert.Equal([1, 2, 3], TranscoderTestHelper.Deserialize<int>(output));
@@ -181,7 +180,7 @@ public class CsvTranscoder_CsvReaderInput_Tests
     public void ToMessagePack_Reader_IBufferWriter_NullWriterThrows()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("1\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         try
         {
             ToMessagePack<int>(ref reader, (IBufferWriter<byte>)null!);
@@ -194,7 +193,7 @@ public class CsvTranscoder_CsvReaderInput_Tests
     public void ToMessagePack_Reader_RefWriter_ProducesExpectedArray()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("10\n20\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         var output = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(output);
         ToMessagePack<int>(ref reader, ref writer);
@@ -206,7 +205,7 @@ public class CsvTranscoder_CsvReaderInput_Tests
     public void ToMessagePack_Reader_Stream_ProducesExpectedArray()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("5\n6\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         using var ms = new MemoryStream();
         ToMessagePack<int>(ref reader, ms);
         Assert.Equal([5, 6], TranscoderTestHelper.Deserialize<int>(ms));
@@ -216,7 +215,7 @@ public class CsvTranscoder_CsvReaderInput_Tests
     public void ToMessagePack_Reader_Stream_NullStreamThrows()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("1\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         try
         {
             ToMessagePack<int>(ref reader, (Stream)null!);
@@ -229,7 +228,7 @@ public class CsvTranscoder_CsvReaderInput_Tests
     public void ToMessagePack_Reader_Stream_NonWritableStreamThrows()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("1\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         using var ms = new MemoryStream(new byte[16], writable: false);
         try
         {
@@ -243,7 +242,7 @@ public class CsvTranscoder_CsvReaderInput_Tests
     public async Task ToMessagePackAsync_Reader_Stream_ProducesExpectedArray()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("7\n8\n9\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         using var ms = new MemoryStream();
         await ToMessagePackAsync<int>(ref reader, ms);
         Assert.Equal([7, 8, 9], TranscoderTestHelper.Deserialize<int>(ms));
@@ -254,10 +253,10 @@ public class CsvTranscoder_CsvReaderInput_Tests
     {
         // ToMessagePackAsync(ref CsvReader, ...) is not async; validation is synchronous.
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("1\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         try
         {
-            ToMessagePackAsync<int>(ref reader, (Stream)null!);
+            ToMessagePackAsync<int>(ref reader, null!);
             Assert.Fail("Expected ArgumentNullException");
         }
         catch (ArgumentNullException) { }
@@ -267,7 +266,7 @@ public class CsvTranscoder_CsvReaderInput_Tests
     public void ToMessagePackAsync_Reader_Stream_NonWritableStreamThrows()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("1\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         using var ms = new MemoryStream(new byte[16], writable: false);
         try
         {
@@ -281,7 +280,7 @@ public class CsvTranscoder_CsvReaderInput_Tests
     public void ToMessagePack_Reader_UsesReaderOptions()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes("42\n"));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         var output = new ArrayBufferWriter<byte>();
         ToMessagePack<int>(ref reader, output);
         Assert.Equal([42], TranscoderTestHelper.Deserialize<int>(output));
@@ -291,7 +290,7 @@ public class CsvTranscoder_CsvReaderInput_Tests
     public void ToMessagePack_Reader_EmptyCsv_ProducesEmptyArray()
     {
         var bytes = new ReadOnlySequence<byte>(Encoding.UTF8.GetBytes(string.Empty));
-        var reader = new CsvReader(bytes, Opts);
+        var reader = new CsvReader(bytes, s_opts);
         var output = new ArrayBufferWriter<byte>();
         ToMessagePack<int>(ref reader, output);
         Assert.Empty(TranscoderTestHelper.Deserialize<int>(output));
@@ -335,16 +334,16 @@ public class CsvTranscoder_CsvReaderInput_Tests
 //  ReadOnlyMemory<byte> inputs
 // ═══════════════════════════════════════════════════════════════════════
 
-public class CsvTranscoder_MemoryInput_Tests
+public class CsvTranscoderMemoryInputTests
 {
-    private static readonly CsvTranscodeOptions Opts = TranscoderTestHelper.SimpleOptions;
+    private static readonly CsvTranscodeOptions s_opts = TranscoderTestHelper.SimpleOptions;
 
     [Fact]
     public void ToMessagePack_Memory_IBufferWriter_ProducesExpectedArray()
     {
         var mem = TranscoderTestHelper.ToMemory("1\n2\n3\n");
         var output = new ArrayBufferWriter<byte>();
-        ToMessagePack<int>(mem, output, Opts);
+        ToMessagePack<int>(mem, output, s_opts);
         Assert.Equal([1, 2, 3], TranscoderTestHelper.Deserialize<int>(output));
     }
 
@@ -354,7 +353,7 @@ public class CsvTranscoder_MemoryInput_Tests
         var mem = TranscoderTestHelper.ToMemory("10\n20\n");
         var output = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(output);
-        ToMessagePack<int>(mem, ref writer, Opts);
+        ToMessagePack<int>(mem, ref writer, s_opts);
         writer.Flush();
         Assert.Equal([10, 20], TranscoderTestHelper.Deserialize<int>(output));
     }
@@ -364,7 +363,7 @@ public class CsvTranscoder_MemoryInput_Tests
     {
         var mem = TranscoderTestHelper.ToMemory("5\n6\n");
         using var ms = new MemoryStream();
-        ToMessagePack<int>(mem, ms, Opts);
+        ToMessagePack<int>(mem, ms, s_opts);
         Assert.Equal([5, 6], TranscoderTestHelper.Deserialize<int>(ms));
     }
 
@@ -373,7 +372,7 @@ public class CsvTranscoder_MemoryInput_Tests
     {
         var mem = TranscoderTestHelper.ToMemory("7\n8\n9\n");
         using var ms = new MemoryStream();
-        await ToMessagePackAsync<int>(mem, ms, Opts);
+        await ToMessagePackAsync<int>(mem, ms, s_opts);
         Assert.Equal([7, 8, 9], TranscoderTestHelper.Deserialize<int>(ms));
     }
 
@@ -382,7 +381,7 @@ public class CsvTranscoder_MemoryInput_Tests
     {
         var mem = TranscoderTestHelper.ToMemory("1\n");
         Assert.Throws<ArgumentNullException>(() =>
-            ToMessagePack<int>(mem, (IBufferWriter<byte>)null!, Opts));
+            ToMessagePack<int>(mem, (IBufferWriter<byte>)null!, s_opts));
     }
 
     [Fact]
@@ -390,7 +389,7 @@ public class CsvTranscoder_MemoryInput_Tests
     {
         var mem = TranscoderTestHelper.ToMemory("1\n");
         Assert.Throws<ArgumentNullException>(() =>
-            ToMessagePack<int>(mem, (Stream)null!, Opts));
+            ToMessagePack<int>(mem, (Stream)null!, s_opts));
     }
 
     [Fact]
@@ -398,7 +397,7 @@ public class CsvTranscoder_MemoryInput_Tests
     {
         var mem = TranscoderTestHelper.ToMemory("1\n");
         using var ms = new MemoryStream(new byte[16], writable: false);
-        Assert.Throws<ArgumentException>(() => ToMessagePack<int>(mem, ms, Opts));
+        Assert.Throws<ArgumentException>(() => ToMessagePack<int>(mem, ms, s_opts));
     }
 
     [Fact]
@@ -406,7 +405,7 @@ public class CsvTranscoder_MemoryInput_Tests
     {
         var mem = TranscoderTestHelper.ToMemory("1\n");
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-            await ToMessagePackAsync<int>(mem, (Stream)null!, Opts));
+            await ToMessagePackAsync<int>(mem, null!, s_opts));
     }
 
     [Fact]
@@ -415,7 +414,7 @@ public class CsvTranscoder_MemoryInput_Tests
         var mem = TranscoderTestHelper.ToMemory("1\n");
         using var ms = new MemoryStream(new byte[16], writable: false);
         await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await ToMessagePackAsync<int>(mem, ms, Opts));
+            await ToMessagePackAsync<int>(mem, ms, s_opts));
     }
 }
 
@@ -423,16 +422,16 @@ public class CsvTranscoder_MemoryInput_Tests
 //  Stream inputs
 // ═══════════════════════════════════════════════════════════════════════
 
-public class CsvTranscoder_StreamInput_Tests
+public class CsvTranscoderStreamInputTests
 {
-    private static readonly CsvTranscodeOptions Opts = TranscoderTestHelper.SimpleOptions;
+    private static readonly CsvTranscodeOptions s_opts = TranscoderTestHelper.SimpleOptions;
 
     [Fact]
     public void ToMessagePack_Stream_IBufferWriter_ProducesExpectedArray()
     {
         using var input = TranscoderTestHelper.ToStream("1\n2\n3\n");
         var output = new ArrayBufferWriter<byte>();
-        ToMessagePack<int>(input, output, Opts);
+        ToMessagePack<int>(input, output, s_opts);
         Assert.Equal([1, 2, 3], TranscoderTestHelper.Deserialize<int>(output));
     }
 
@@ -441,7 +440,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         var output = new ArrayBufferWriter<byte>();
         Assert.Throws<ArgumentNullException>(() =>
-            ToMessagePack<int>((Stream)null!, output, Opts));
+            ToMessagePack<int>((Stream)null!, output, s_opts));
     }
 
     [Fact]
@@ -450,7 +449,7 @@ public class CsvTranscoder_StreamInput_Tests
         var noRead = new WriteOnlyStream(new MemoryStream());
         var output = new ArrayBufferWriter<byte>();
         Assert.Throws<ArgumentException>(() =>
-            ToMessagePack<int>(noRead, output, Opts));
+            ToMessagePack<int>(noRead, output, s_opts));
     }
 
     [Fact]
@@ -458,7 +457,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         using var input = TranscoderTestHelper.ToStream("1\n");
         Assert.Throws<ArgumentNullException>(() =>
-            ToMessagePack<int>(input, (IBufferWriter<byte>)null!, Opts));
+            ToMessagePack<int>(input, (IBufferWriter<byte>)null!, s_opts));
     }
 
     [Fact]
@@ -467,7 +466,7 @@ public class CsvTranscoder_StreamInput_Tests
         using var input = TranscoderTestHelper.ToStream("10\n20\n");
         var output = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(output);
-        ToMessagePack<int>(input, ref writer, Opts);
+        ToMessagePack<int>(input, ref writer, s_opts);
         writer.Flush();
         Assert.Equal([10, 20], TranscoderTestHelper.Deserialize<int>(output));
     }
@@ -480,7 +479,7 @@ public class CsvTranscoder_StreamInput_Tests
         Assert.Throws<ArgumentNullException>(() =>
         {
             var w = new MessagePackWriter(output);
-            ToMessagePack<int>((Stream)null!, ref w, Opts);
+            ToMessagePack<int>((Stream)null!, ref w, s_opts);
         });
     }
 
@@ -492,7 +491,7 @@ public class CsvTranscoder_StreamInput_Tests
         {
             var output = new ArrayBufferWriter<byte>();
             var w = new MessagePackWriter(output);
-            ToMessagePack<int>(noRead, ref w, Opts);
+            ToMessagePack<int>(noRead, ref w, s_opts);
         });
     }
 
@@ -501,7 +500,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         using var input = TranscoderTestHelper.ToStream("5\n6\n");
         using var output = new MemoryStream();
-        ToMessagePack<int>(input, output, Opts);
+        ToMessagePack<int>(input, output, s_opts);
         Assert.Equal([5, 6], TranscoderTestHelper.Deserialize<int>(output));
     }
 
@@ -510,7 +509,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         using var output = new MemoryStream();
         Assert.Throws<ArgumentNullException>(() =>
-            ToMessagePack<int>((Stream)null!, output, Opts));
+            ToMessagePack<int>((Stream)null!, output, s_opts));
     }
 
     [Fact]
@@ -518,7 +517,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         using var input = TranscoderTestHelper.ToStream("1\n");
         Assert.Throws<ArgumentNullException>(() =>
-            ToMessagePack<int>(input, (Stream)null!, Opts));
+            ToMessagePack<int>(input, (Stream)null!, s_opts));
     }
 
     [Fact]
@@ -526,7 +525,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         var noRead = new WriteOnlyStream(new MemoryStream());
         using var output = new MemoryStream();
-        Assert.Throws<ArgumentException>(() => ToMessagePack<int>(noRead, output, Opts));
+        Assert.Throws<ArgumentException>(() => ToMessagePack<int>(noRead, output, s_opts));
     }
 
     [Fact]
@@ -534,7 +533,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         using var input = TranscoderTestHelper.ToStream("1\n");
         using var output = new MemoryStream(new byte[16], writable: false);
-        Assert.Throws<ArgumentException>(() => ToMessagePack<int>(input, output, Opts));
+        Assert.Throws<ArgumentException>(() => ToMessagePack<int>(input, output, s_opts));
     }
 
     [Fact]
@@ -542,7 +541,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         using var input = TranscoderTestHelper.ToStream("7\n8\n9\n");
         using var output = new MemoryStream();
-        await ToMessagePackAsync<int>(input, output, Opts);
+        await ToMessagePackAsync<int>(input, output, s_opts);
         Assert.Equal([7, 8, 9], TranscoderTestHelper.Deserialize<int>(output));
     }
 
@@ -551,7 +550,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         using var output = new MemoryStream();
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-            await ToMessagePackAsync<int>((Stream)null!, output, Opts));
+            await ToMessagePackAsync<int>((Stream)null!, output, s_opts));
     }
 
     [Fact]
@@ -559,7 +558,7 @@ public class CsvTranscoder_StreamInput_Tests
     {
         using var input = TranscoderTestHelper.ToStream("1\n");
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-            await ToMessagePackAsync<int>(input, (Stream)null!, Opts));
+            await ToMessagePackAsync<int>(input, null!, s_opts));
     }
 
     [Fact]
@@ -568,7 +567,7 @@ public class CsvTranscoder_StreamInput_Tests
         var noRead = new WriteOnlyStream(new MemoryStream());
         using var output = new MemoryStream();
         await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await ToMessagePackAsync<int>(noRead, output, Opts));
+            await ToMessagePackAsync<int>(noRead, output, s_opts));
     }
 
     [Fact]
@@ -577,7 +576,7 @@ public class CsvTranscoder_StreamInput_Tests
         using var input = TranscoderTestHelper.ToStream("1\n");
         using var output = new MemoryStream(new byte[16], writable: false);
         await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await ToMessagePackAsync<int>(input, output, Opts));
+            await ToMessagePackAsync<int>(input, output, s_opts));
     }
 }
 
@@ -585,7 +584,7 @@ public class CsvTranscoder_StreamInput_Tests
 //  Integration – header, comments, string values, edge cases
 // ═══════════════════════════════════════════════════════════════════════
 
-public class CsvTranscoder_Integration_Tests
+public class CsvTranscoderIntegrationTests
 {
     [Fact]
     public void ToMessagePack_StringValues_ProducesExpectedArray()
@@ -640,7 +639,7 @@ public class CsvTranscoder_Integration_Tests
         const int valueLength = 100;
         const int rowCount = 700;
         var value = new string('x', valueLength);
-        var sb = new System.Text.StringBuilder();
+        var sb = new StringBuilder();
         for (var i = 0; i < rowCount; i++)
         {
             sb.Append(value);
@@ -663,13 +662,13 @@ public class CsvTranscoder_Integration_Tests
 //  ReadOnlySequence<byte> overload.
 // ═══════════════════════════════════════════════════════════════════════
 
-public class CsvTranscoder_NullOptions_Tests
+public class CsvTranscoderNullOptionsTests
 {
     // Build a single-row CSV that is valid with the default CsvTranscodeOptions
     // (HasHeader=true, NewLine=Environment.NewLine, Separator=',').
     private static ReadOnlySequence<byte> MakeCsv()
     {
-        var nl = System.Environment.NewLine;
+        var nl = Environment.NewLine;
         var csv = $"value{nl}7{nl}";
         return TranscoderTestHelper.ToSequence(csv);
     }

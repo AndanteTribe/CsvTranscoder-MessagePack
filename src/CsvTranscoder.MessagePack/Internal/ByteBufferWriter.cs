@@ -15,23 +15,9 @@ internal sealed class ByteBufferWriter : IBufferWriter<byte>, IDisposable
 
     public int WrittenCount => _index;
 
-    public ReadOnlySpan<byte> WrittenSpan
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(_buffer is null, this);
-            return _buffer.AsSpan(0, _index);
-        }
-    }
+    public ReadOnlySpan<byte> WrittenSpan => WrittenMemory.Span;
 
-    public ReadOnlyMemory<byte> WrittenMemory
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(_buffer is null, this);
-            return _buffer.AsMemory(0, _index);
-        }
-    }
+    public ReadOnlyMemory<byte> WrittenMemory => _buffer?.AsMemory(0, _index) ?? throw new ObjectDisposedException(nameof(ByteBufferWriter));
 
     public ByteBufferWriter()
     {
@@ -41,21 +27,33 @@ internal sealed class ByteBufferWriter : IBufferWriter<byte>, IDisposable
 
     public void Advance(int count)
     {
-        ObjectDisposedException.ThrowIf(_buffer is null, this);
-        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        if (_buffer is null)
+        {
+            throw new ObjectDisposedException(nameof(ByteBufferWriter));
+        }
+        if (count < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count));
+        }
         _index += count;
     }
 
     public Memory<byte> GetMemory(int sizeHint = 0)
     {
-        ObjectDisposedException.ThrowIf(_buffer is null, this);
+        if (_buffer is null)
+        {
+            throw new ObjectDisposedException(nameof(ByteBufferWriter));
+        }
         EnsureCapacity(sizeHint);
         return _buffer.AsMemory(_index);
     }
 
     public Span<byte> GetSpan(int sizeHint = 0)
     {
-        ObjectDisposedException.ThrowIf(_buffer is null, this);
+        if (_buffer is null)
+        {
+            throw new ObjectDisposedException(nameof(ByteBufferWriter));
+        }
         EnsureCapacity(sizeHint);
         return _buffer.AsSpan(_index);
     }
@@ -63,7 +61,10 @@ internal sealed class ByteBufferWriter : IBufferWriter<byte>, IDisposable
     private void EnsureCapacity(int sizeHint)
     {
         var needed = _index + Math.Max(sizeHint, 1);
-        if (needed <= _buffer!.Length) return;
+        if (needed <= _buffer!.Length)
+        {
+            return;
+        }
 
         var newSize = Math.Max(needed, _buffer.Length * 2);
         var newBuffer = ArrayPool<byte>.Shared.Rent(newSize);
@@ -75,7 +76,11 @@ internal sealed class ByteBufferWriter : IBufferWriter<byte>, IDisposable
     public void Dispose()
     {
         var buffer = _buffer;
-        if (buffer is null) return;
+        if (buffer is null)
+        {
+            return;
+        }
+
         _buffer = null;
         ArrayPool<byte>.Shared.Return(buffer);
     }

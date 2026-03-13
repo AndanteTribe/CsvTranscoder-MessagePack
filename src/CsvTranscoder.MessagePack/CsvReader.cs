@@ -230,7 +230,7 @@ public ref struct CsvReader
         // Fast path for single-byte newlines (e.g. '\n').
         if (newLine.Length == 1)
         {
-            Span<byte> terminators = stackalloc byte[] { _separator, newLine[0] };
+            var terminators = (Span<byte>)stackalloc byte[] { _separator, newLine[0] };
             if (_reader.TryReadToAny(out field, terminators, advancePastDelimiter: false))
             {
                 // Consume the separator if that is what we stopped at; leave a newline for TryAdvanceToNextRow.
@@ -507,7 +507,7 @@ public ref struct CsvReader
         }
 
         var temp = (Span<char>)stackalloc char[Encoding.UTF8.GetCharCount(field.FirstSpan)];
-        Encoding.UTF8.TryGetChars(field.FirstSpan, temp, out _);
+        Encoding.UTF8.GetChars(field.FirstSpan, temp);
         return temp[0];
     }
 
@@ -519,13 +519,27 @@ public ref struct CsvReader
     /// </summary>
     public bool IsNextFieldEmpty()
     {
-        if (_reader.End) return true;
-        if (!_reader.TryPeek(out var b)) return true;
+        if (_reader.End)
+        {
+            return true;
+        }
+
+        if (!_reader.TryPeek(out var b))
+        {
+            return true;
+        }
 
         // Unquoted empty field: the very next byte is a separator or the start of a newline.
-        if (b == _separator) return true;
+        if (b == _separator)
+        {
+            return true;
+        }
+
         var newLineSpan = _newLine.Span;
-        if (newLineSpan.Length > 0 && _reader.IsNext(newLineSpan, advancePast: false)) return true;
+        if (newLineSpan.Length > 0 && _reader.IsNext(newLineSpan, advancePast: false))
+        {
+            return true;
+        }
 
         // Quoted empty field: "".
         if (b == (byte)'"' && _options.Quote != Quote.None)

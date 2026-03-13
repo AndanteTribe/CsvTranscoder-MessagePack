@@ -12,16 +12,23 @@ public sealed class TimeSpanFormatter : ICsvFormatter<TimeSpan>
     {
         var field = reader.ReadRaw();
         if (field.IsEmpty)
-        {
-            writer.WriteNil();
-            return;
-        }
+            throw new FormatException("Cannot parse empty field as TimeSpan.");
 
         using var owner = new FieldSpanOwner(in field, stackalloc byte[32]);
         var span = owner.Span;
-        Span<char> chars = stackalloc char[Encoding.UTF8.GetCharCount(span)];
-        Encoding.UTF8.TryGetChars(span, chars, out _);
-        var value = TimeSpan.Parse(chars, CultureInfo.InvariantCulture);
+
+        // Use a fixed 64-char stack buffer; fall back to string allocation for unusually large fields.
+        Span<char> charBuf = stackalloc char[64];
+        TimeSpan value;
+        if (Encoding.UTF8.GetCharCount(span) <= 64 && Encoding.UTF8.TryGetChars(span, charBuf, out var written))
+        {
+            value = TimeSpan.Parse(charBuf[..written], CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            value = TimeSpan.Parse(Encoding.UTF8.GetString(span), CultureInfo.InvariantCulture);
+        }
+
         MessagePack.Formatters.TimeSpanFormatter.Instance.Serialize(ref writer, value, MessagePackSerializerOptions.Standard);
     }
 }

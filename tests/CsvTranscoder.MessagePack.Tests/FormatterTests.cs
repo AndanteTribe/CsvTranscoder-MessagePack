@@ -274,16 +274,14 @@ public class TimeSpanFormatterTests
     }
 
     [Fact]
-    public void TimeSpanFormatter_EmptyField_WritesNil()
+    public void TimeSpanFormatter_EmptyField_ThrowsFormatException()
     {
         var opts = FormatterTestHelper.SimpleOptions;
         var reader = FormatterTestHelper.CreateReader("\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        TimeSpanFormatter.Instance.Transcode(ref writer, ref reader, opts);
-        writer.Flush();
-        var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
-        Assert.True(msgpackReader.TryReadNil());
+        try { TimeSpanFormatter.Instance.Transcode(ref writer, ref reader, opts); Assert.Fail("Expected FormatException"); }
+        catch (FormatException) { }
     }
 }
 
@@ -302,16 +300,14 @@ public class GuidFormatterTests
     }
 
     [Fact]
-    public void GuidFormatter_EmptyField_WritesNil()
+    public void GuidFormatter_EmptyField_ThrowsFormatException()
     {
         var opts = FormatterTestHelper.SimpleOptions;
         var reader = FormatterTestHelper.CreateReader("\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        GuidFormatter.Instance.Transcode(ref writer, ref reader, opts);
-        writer.Flush();
-        var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
-        Assert.True(msgpackReader.TryReadNil());
+        try { GuidFormatter.Instance.Transcode(ref writer, ref reader, opts); Assert.Fail("Expected FormatException"); }
+        catch (FormatException) { }
     }
 }
 
@@ -503,6 +499,32 @@ public class IsNextFieldEmptyTests
         reader.ReadInt32(); // reads "1" and advances past separator
         Assert.True(reader.IsNextFieldEmpty());
     }
+
+    [Fact]
+    public void IsNextFieldEmpty_CrLfNewline_EmptyFieldAtEndOfRow_ReturnsTrue()
+    {
+        // With CRLF newline, an empty field before the newline should still return true
+        var crlfOpts = new CsvTranscodeOptions
+        {
+            HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
+            NewLine = "\r\n", Separator = ','
+        };
+        var reader = FormatterTestHelper.CreateReader("1,\r\n", crlfOpts);
+        reader.ReadInt32();
+        Assert.True(reader.IsNextFieldEmpty());
+    }
+
+    [Fact]
+    public void IsNextFieldEmpty_CrLfNewline_NonEmptyField_ReturnsFalse()
+    {
+        var crlfOpts = new CsvTranscodeOptions
+        {
+            HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
+            NewLine = "\r\n", Separator = ','
+        };
+        var reader = FormatterTestHelper.CreateReader("42\r\n", crlfOpts);
+        Assert.False(reader.IsNextFieldEmpty());
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -539,16 +561,14 @@ public class DateTimeOffsetFormatterTests
     }
 
     [Fact]
-    public void DateTimeOffsetFormatter_EmptyField_WritesNil()
+    public void DateTimeOffsetFormatter_EmptyField_ThrowsFormatException()
     {
         var opts = FormatterTestHelper.SimpleOptions;
         var reader = FormatterTestHelper.CreateReader("\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader, opts);
-        writer.Flush();
-        var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
-        Assert.True(msgpackReader.TryReadNil());
+        try { DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader, opts); Assert.Fail("Expected FormatException"); }
+        catch (FormatException) { }
     }
 }
 

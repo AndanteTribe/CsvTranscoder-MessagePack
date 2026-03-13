@@ -525,7 +525,7 @@ public ref struct CsvReader
         // Unquoted empty field: the very next byte is a separator or the start of a newline.
         if (b == _separator) return true;
         var newLineSpan = _newLine.Span;
-        if (newLineSpan.Length > 0 && b == newLineSpan[0]) return true;
+        if (newLineSpan.Length > 0 && _reader.IsNext(newLineSpan, advancePast: false)) return true;
 
         // Quoted empty field: "".
         if (b == (byte)'"' && _options.Quote != Quote.None)

@@ -18,7 +18,6 @@ public ref struct CsvReader
     private int _currentColumn;
 
     public readonly CsvTranscodeOptions Options => _options;
-    public readonly ReadOnlySequence<byte> Sequence => _reader.Sequence;
     public readonly long Consumed => _reader.Consumed;
     public readonly long Remaining => _reader.Remaining;
     public readonly bool End => _reader.End;

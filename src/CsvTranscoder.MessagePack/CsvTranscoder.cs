@@ -11,69 +11,93 @@ namespace AndanteTribe.Csv;
 public static class CsvTranscoder
 {
     /// <summary>
-    /// Core transcoding loop: optionally skips the header, then calls the formatter for each
-    /// data row and assembles the results into a MessagePack array written to <paramref name="writer"/>.
+    /// Counts data rows in the CSV sequence (excluding header and comment rows)
+    /// without producing any MessagePack output.
     /// </summary>
-    private static void TranscodeCore<T>(ref CsvReader reader, ref MessagePackWriter writer, CsvTranscodeOptions options)
+    private static int CountDataRows(ReadOnlySequence<byte> sequence, CsvTranscodeOptions options)
     {
-        var formatter = options.Resolver.GetFormatterWithVerify<T>();
+        var counter = new CsvReader(sequence, options);
+        if (options.HasHeader)
+        {
+            counter.SkipHeader();
+        }
 
+        if (counter.End) return 0;
+
+        var count = 0;
+        do
+        {
+            count++;
+        }
+        while (counter.TryAdvanceToNextRow());
+
+        return count;
+    }
+
+    /// <summary>
+    /// Core sequence-based transcoding using a two-pass approach:
+    /// first counts data rows to write the correct array header, then transcodes directly into <paramref name="writer"/>.
+    /// </summary>
+    private static void TranscodeCore<T>(ReadOnlySequence<byte> sequence, ref MessagePackWriter writer, CsvTranscodeOptions options)
+    {
+        var count = CountDataRows(sequence, options);
+        writer.WriteArrayHeader(count);
+
+        if (count == 0) return;
+
+        var formatter = options.Resolver.GetFormatterWithVerify<T>();
+        var reader = new CsvReader(sequence, options);
         if (options.HasHeader)
         {
             reader.SkipHeader();
         }
 
-        // Buffer all row payloads so we know the element count before writing the array header.
-        var bodyBuffer = new ArrayBufferWriter<byte>();
-        var bodyWriter = new MessagePackWriter(bodyBuffer);
-        var count = 0;
-
-        if (!reader.End)
+        do
         {
-            do
-            {
-                formatter.Transcode(ref bodyWriter, ref reader, options);
-                count++;
-            }
-            while (reader.TryAdvanceToNextRow());
+            formatter.Transcode(ref writer, ref reader, options);
         }
+        while (reader.TryAdvanceToNextRow());
+    }
 
-        bodyWriter.Flush();
-
+    /// <summary>
+    /// Core <see cref="CsvReader"/>-based transcoding: counts rows via a fresh reader from the same
+    /// underlying sequence, then transcodes using the supplied <paramref name="reader"/>.
+    /// The supplied reader is advanced through all data rows by this call.
+    /// </summary>
+    private static void TranscodeCore<T>(ref CsvReader reader, ref MessagePackWriter writer, CsvTranscodeOptions options)
+    {
+        var count = CountDataRows(reader.Sequence, options);
         writer.WriteArrayHeader(count);
-        writer.WriteRaw(bodyBuffer.WrittenSpan);
-    }
 
-    /// <summary>Reads all bytes from <paramref name="stream"/> into an <see cref="ArrayBufferWriter{T}"/>.</summary>
-    private static ArrayBufferWriter<byte> ReadAllBytes(Stream stream)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        const int chunkSize = 4096;
-        while (true)
+        if (count == 0) return;
+
+        var formatter = options.Resolver.GetFormatterWithVerify<T>();
+        if (options.HasHeader)
         {
-            var memory = buffer.GetMemory(chunkSize);
-            var read = stream.Read(memory.Span);
-            if (read == 0) break;
-            buffer.Advance(read);
+            reader.SkipHeader();
         }
 
-        return buffer;
+        do
+        {
+            formatter.Transcode(ref writer, ref reader, options);
+        }
+        while (reader.TryAdvanceToNextRow());
     }
 
-    /// <summary>Asynchronously reads all bytes from <paramref name="stream"/> into an <see cref="ArrayBufferWriter{T}"/>.</summary>
-    private static async ValueTask<ArrayBufferWriter<byte>> ReadAllBytesAsync(Stream stream, CancellationToken cancellationToken)
+    /// <summary>Reads all bytes from <paramref name="stream"/> into a contiguous buffer.</summary>
+    private static ReadOnlyMemory<byte> ReadAllBytes(Stream stream)
     {
-        var buffer = new ArrayBufferWriter<byte>();
-        const int chunkSize = 4096;
-        while (true)
-        {
-            var memory = buffer.GetMemory(chunkSize);
-            var read = await stream.ReadAsync(memory, cancellationToken).ConfigureAwait(false);
-            if (read == 0) break;
-            buffer.Advance(read);
-        }
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return ms.ToArray();
+    }
 
-        return buffer;
+    /// <summary>Asynchronously reads all bytes from <paramref name="stream"/> into a contiguous buffer.</summary>
+    private static async ValueTask<ReadOnlyMemory<byte>> ReadAllBytesAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
+        return ms.ToArray();
     }
 
     #region ReadOnlySequence<byte> inputs
@@ -84,8 +108,7 @@ public static class CsvTranscoder
         ArgumentNullException.ThrowIfNull(writer);
         var opts = options ?? new CsvTranscodeOptions();
         var msgWriter = new MessagePackWriter(writer);
-        var reader = new CsvReader(byteSequence, opts);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        TranscodeCore<T>(byteSequence, ref msgWriter, opts);
         msgWriter.Flush();
     }
 
@@ -93,8 +116,7 @@ public static class CsvTranscoder
     public static void ToMessagePack<T>(ReadOnlySequence<byte> byteSequence, ref MessagePackWriter writer, CsvTranscodeOptions? options = null)
     {
         var opts = options ?? new CsvTranscodeOptions();
-        var reader = new CsvReader(byteSequence, opts);
-        TranscodeCore<T>(ref reader, ref writer, opts);
+        TranscodeCore<T>(byteSequence, ref writer, opts);
     }
 
     /// <summary>Transcodes CSV data in <paramref name="byteSequence"/> to MessagePack, writing the result to <paramref name="stream"/>.</summary>
@@ -106,12 +128,11 @@ public static class CsvTranscoder
         if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
 
         var opts = options ?? new CsvTranscodeOptions();
-        var buffer = new ArrayBufferWriter<byte>();
-        var msgWriter = new MessagePackWriter(buffer);
-        var reader = new CsvReader(byteSequence, opts);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        var bufferWriter = new StreamBufferWriter(stream);
+        var msgWriter = new MessagePackWriter(bufferWriter);
+        TranscodeCore<T>(byteSequence, ref msgWriter, opts);
         msgWriter.Flush();
-        stream.Write(buffer.WrittenSpan);
+        bufferWriter.Flush();
     }
 
     /// <summary>Asynchronously transcodes CSV data in <paramref name="byteSequence"/> to MessagePack, writing the result to <paramref name="stream"/>.</summary>
@@ -123,12 +144,11 @@ public static class CsvTranscoder
         if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
 
         var opts = options ?? new CsvTranscodeOptions();
-        var buffer = new ArrayBufferWriter<byte>();
-        var msgWriter = new MessagePackWriter(buffer);
-        var reader = new CsvReader(byteSequence, opts);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        var bufferWriter = new StreamBufferWriter(stream);
+        var msgWriter = new MessagePackWriter(bufferWriter);
+        TranscodeCore<T>(byteSequence, ref msgWriter, opts);
         msgWriter.Flush();
-        await stream.WriteAsync(buffer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+        await bufferWriter.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
     #endregion
@@ -161,20 +181,20 @@ public static class CsvTranscoder
         if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
 
         var opts = options ?? reader.Options;
-        var buffer = new ArrayBufferWriter<byte>();
-        var msgWriter = new MessagePackWriter(buffer);
+        var bufferWriter = new StreamBufferWriter(stream);
+        var msgWriter = new MessagePackWriter(bufferWriter);
         TranscodeCore<T>(ref reader, ref msgWriter, opts);
         msgWriter.Flush();
-        stream.Write(buffer.WrittenSpan);
+        bufferWriter.Flush();
     }
 
     /// <summary>
     /// Transcodes CSV data from <paramref name="reader"/> to MessagePack synchronously, then
-    /// asynchronously writes the result to <paramref name="stream"/>.
+    /// asynchronously flushes the result to <paramref name="stream"/>.
     /// </summary>
     /// <remarks>
     /// The transcoding step is always performed synchronously.
-    /// Only the final write to <paramref name="stream"/> is asynchronous.
+    /// Only the final flush to <paramref name="stream"/> is asynchronous.
     /// This overload cannot be declared <see langword="async"/> because <c>ref</c> parameters
     /// are not allowed in async methods; the method returns a <see cref="ValueTask"/> directly.
     /// </remarks>
@@ -186,11 +206,11 @@ public static class CsvTranscoder
         if (!stream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(stream));
 
         var opts = options ?? reader.Options;
-        var buffer = new ArrayBufferWriter<byte>();
-        var msgWriter = new MessagePackWriter(buffer);
+        var bufferWriter = new StreamBufferWriter(stream);
+        var msgWriter = new MessagePackWriter(bufferWriter);
         TranscodeCore<T>(ref reader, ref msgWriter, opts);
         msgWriter.Flush();
-        return stream.WriteAsync(buffer.WrittenMemory, cancellationToken);
+        return bufferWriter.FlushAsync(cancellationToken);
     }
 
     #endregion
@@ -230,11 +250,10 @@ public static class CsvTranscoder
         if (!inputStream.CanRead) throw new ArgumentException("Stream must be readable.", nameof(inputStream));
         ArgumentNullException.ThrowIfNull(writer);
 
-        var inputBuffer = ReadAllBytes(inputStream);
+        var inputBytes = ReadAllBytes(inputStream);
         var opts = options ?? new CsvTranscodeOptions();
         var msgWriter = new MessagePackWriter(writer);
-        var reader = new CsvReader(new ReadOnlySequence<byte>(inputBuffer.WrittenMemory), opts);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        TranscodeCore<T>(new ReadOnlySequence<byte>(inputBytes), ref msgWriter, opts);
         msgWriter.Flush();
     }
 
@@ -246,10 +265,9 @@ public static class CsvTranscoder
         ArgumentNullException.ThrowIfNull(inputStream);
         if (!inputStream.CanRead) throw new ArgumentException("Stream must be readable.", nameof(inputStream));
 
-        var inputBuffer = ReadAllBytes(inputStream);
+        var inputBytes = ReadAllBytes(inputStream);
         var opts = options ?? new CsvTranscodeOptions();
-        var reader = new CsvReader(new ReadOnlySequence<byte>(inputBuffer.WrittenMemory), opts);
-        TranscodeCore<T>(ref reader, ref writer, opts);
+        TranscodeCore<T>(new ReadOnlySequence<byte>(inputBytes), ref writer, opts);
     }
 
     /// <summary>Transcodes CSV data from <paramref name="inputStream"/> to MessagePack, writing the result to <paramref name="outputStream"/>.</summary>
@@ -262,14 +280,13 @@ public static class CsvTranscoder
         ArgumentNullException.ThrowIfNull(outputStream);
         if (!outputStream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(outputStream));
 
-        var inputBuffer = ReadAllBytes(inputStream);
+        var inputBytes = ReadAllBytes(inputStream);
         var opts = options ?? new CsvTranscodeOptions();
-        var outputBuffer = new ArrayBufferWriter<byte>();
-        var msgWriter = new MessagePackWriter(outputBuffer);
-        var reader = new CsvReader(new ReadOnlySequence<byte>(inputBuffer.WrittenMemory), opts);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        var bufferWriter = new StreamBufferWriter(outputStream);
+        var msgWriter = new MessagePackWriter(bufferWriter);
+        TranscodeCore<T>(new ReadOnlySequence<byte>(inputBytes), ref msgWriter, opts);
         msgWriter.Flush();
-        outputStream.Write(outputBuffer.WrittenSpan);
+        bufferWriter.Flush();
     }
 
     /// <summary>Asynchronously transcodes CSV data from <paramref name="inputStream"/> to MessagePack, writing the result to <paramref name="outputStream"/>.</summary>
@@ -282,15 +299,76 @@ public static class CsvTranscoder
         ArgumentNullException.ThrowIfNull(outputStream);
         if (!outputStream.CanWrite) throw new ArgumentException("Stream must be writable.", nameof(outputStream));
 
-        var inputBuffer = await ReadAllBytesAsync(inputStream, cancellationToken).ConfigureAwait(false);
+        var inputBytes = await ReadAllBytesAsync(inputStream, cancellationToken).ConfigureAwait(false);
         var opts = options ?? new CsvTranscodeOptions();
-        var outputBuffer = new ArrayBufferWriter<byte>();
-        var msgWriter = new MessagePackWriter(outputBuffer);
-        var reader = new CsvReader(new ReadOnlySequence<byte>(inputBuffer.WrittenMemory), opts);
-        TranscodeCore<T>(ref reader, ref msgWriter, opts);
+        var bufferWriter = new StreamBufferWriter(outputStream);
+        var msgWriter = new MessagePackWriter(bufferWriter);
+        TranscodeCore<T>(new ReadOnlySequence<byte>(inputBytes), ref msgWriter, opts);
         msgWriter.Flush();
-        await outputStream.WriteAsync(outputBuffer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+        await bufferWriter.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
     #endregion
+}
+
+/// <summary>
+/// An <see cref="IBufferWriter{T}"/> that writes to a <see cref="Stream"/> in chunks.
+/// Buffers data internally and flushes to the stream on <see cref="Flush"/> / <see cref="FlushAsync"/>.
+/// </summary>
+file sealed class StreamBufferWriter(Stream stream) : IBufferWriter<byte>
+{
+    private const int InitialBufferSize = 65536;
+
+    private byte[] _buffer = new byte[InitialBufferSize];
+    private int _written;
+
+    public void Advance(int count) => _written += count;
+
+    public Memory<byte> GetMemory(int sizeHint = 0)
+    {
+        EnsureCapacity(sizeHint);
+        return _buffer.AsMemory(_written);
+    }
+
+    public Span<byte> GetSpan(int sizeHint = 0)
+    {
+        EnsureCapacity(sizeHint);
+        return _buffer.AsSpan(_written);
+    }
+
+    private void EnsureCapacity(int sizeHint)
+    {
+        var needed = _written + Math.Max(sizeHint, 1);
+        if (needed <= _buffer.Length) return;
+
+        // Flush accumulated data before growing the buffer.
+        stream.Write(_buffer, 0, _written);
+        _written = 0;
+
+        if (sizeHint > _buffer.Length)
+        {
+            _buffer = new byte[Math.Max(sizeHint, _buffer.Length * 2)];
+        }
+    }
+
+    public void Flush()
+    {
+        if (_written > 0)
+        {
+            stream.Write(_buffer, 0, _written);
+            _written = 0;
+        }
+    }
+
+    public ValueTask FlushAsync(CancellationToken cancellationToken = default)
+    {
+        if (_written == 0) return ValueTask.CompletedTask;
+        return FlushAsyncCore(cancellationToken);
+    }
+
+    private async ValueTask FlushAsyncCore(CancellationToken cancellationToken)
+    {
+        await stream.WriteAsync(_buffer.AsMemory(0, _written), cancellationToken).ConfigureAwait(false);
+        _written = 0;
+    }
 }

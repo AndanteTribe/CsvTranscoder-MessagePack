@@ -723,3 +723,60 @@ public class ValueTupleFormatterTests
         Assert.NotNull(resolver.GetFormatter<Version?>());
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ReadChars
+// ═══════════════════════════════════════════════════════════════════════
+
+public class ReadCharsTests
+{
+    private static CsvTranscodeOptions Opts => new()
+    {
+        HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
+        NewLine = "\n", Separator = ','
+    };
+
+    [Fact]
+    public void ReadChars_SmallField_WritesToBuffer_ReturnsNull()
+    {
+        var reader = FormatterTestHelper.CreateReader("hello\n", Opts);
+        Span<char> buf = stackalloc char[16];
+        var overflow = reader.ReadChars(buf, out var len);
+        Assert.Null(overflow);
+        Assert.Equal(5, len);
+        Assert.Equal("hello", new string(buf[..len]));
+    }
+
+    [Fact]
+    public void ReadChars_EmptyField_WritesZeroChars_ReturnsNull()
+    {
+        var reader = FormatterTestHelper.CreateReader("\n", Opts);
+        Span<char> buf = stackalloc char[16];
+        var overflow = reader.ReadChars(buf, out var len);
+        Assert.Null(overflow);
+        Assert.Equal(0, len);
+    }
+
+    [Fact]
+    public void ReadChars_FieldLargerThanBuffer_ReturnsString()
+    {
+        var reader = FormatterTestHelper.CreateReader("abcdefghijklmnopqrstuvwxyz\n", Opts);
+        Span<char> buf = stackalloc char[4]; // too small
+        var overflow = reader.ReadChars(buf, out var len);
+        Assert.NotNull(overflow);
+        Assert.Equal(26, len);
+        Assert.Equal("abcdefghijklmnopqrstuvwxyz", overflow);
+    }
+
+    [Fact]
+    public void ReadChars_AsciiField_SmallBuffer_DecodesCorrectly()
+    {
+        // "abc" as UTF-8 is 3 bytes, 3 chars
+        var reader = FormatterTestHelper.CreateReader("abc\n", Opts);
+        Span<char> buf = stackalloc char[8];
+        var overflow = reader.ReadChars(buf, out var len);
+        Assert.Null(overflow);
+        Assert.Equal(3, len);
+        Assert.Equal("abc", new string(buf[..len]));
+    }
+}

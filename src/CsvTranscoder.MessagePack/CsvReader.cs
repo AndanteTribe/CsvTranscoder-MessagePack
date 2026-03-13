@@ -592,6 +592,63 @@ public ref struct CsvReader
         return Encoding.UTF8.GetString(field.ToArray());
     }
 
+    /// <summary>
+    /// Reads the current field and decodes its UTF-8 bytes as UTF-16 characters.
+    /// When the decoded characters fit in <paramref name="buffer"/>, they are written there and
+    /// <see langword="null"/> is returned (no allocation). When the field is too large for
+    /// <paramref name="buffer"/>, a newly allocated <see cref="string"/> is returned instead.
+    /// In both cases <paramref name="charsWritten"/> is set to the character count.
+    /// </summary>
+    /// <param name="buffer">Caller-provided stack buffer for small fields.</param>
+    /// <param name="charsWritten">Number of characters in the decoded field (0 when the field is empty).</param>
+    /// <returns>
+    /// <see langword="null"/> when the decoded field fits in <paramref name="buffer"/>;
+    /// a <see cref="string"/> containing the entire decoded field otherwise.
+    /// </returns>
+    public string? ReadChars(scoped Span<char> buffer, out int charsWritten)
+    {
+        TryReadField(out var field);
+
+        if (field.IsEmpty)
+        {
+            charsWritten = 0;
+            return null;
+        }
+
+        ReadOnlySpan<byte> bytes;
+
+        if (field.IsSingleSegment)
+        {
+            bytes = field.FirstSpan;
+        }
+        else
+        {
+            // Multi-segment: fall back to string allocation to avoid a temporary byte array.
+            var str = Encoding.UTF8.GetString(field.ToArray());
+            charsWritten = str.Length;
+            return str;
+        }
+
+        var maxCharCount = Encoding.UTF8.GetMaxCharCount(bytes.Length);
+        if (maxCharCount <= buffer.Length)
+        {
+            if (Encoding.UTF8.TryGetChars(bytes, buffer, out charsWritten))
+            {
+                return null;
+            }
+
+            // TryGetChars unexpectedly failed; fall back to a string (should not happen in practice).
+            var fallback = Encoding.UTF8.GetString(bytes);
+            charsWritten = fallback.Length;
+            return fallback;
+        }
+
+        // Field too large for the caller's buffer — allocate a string.
+        var overflow = Encoding.UTF8.GetString(bytes);
+        charsWritten = overflow.Length;
+        return overflow;
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static T ThrowFormatException<T>(ReadOnlySpan<byte> span)
         => throw new FormatException($"Cannot parse '{Encoding.UTF8.GetString(span)}' as {typeof(T).Name}.");

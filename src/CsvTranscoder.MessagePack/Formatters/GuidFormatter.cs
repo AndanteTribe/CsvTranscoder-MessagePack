@@ -8,13 +8,15 @@ public sealed class GuidFormatter : ICsvFormatter<Guid>
 
     public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
     {
-        var str = reader.ReadString();
-        if (string.IsNullOrEmpty(str))
+        Span<char> buf = stackalloc char[40];
+        var overflow = reader.ReadChars(buf, out var len);
+        if (len == 0)
         {
             writer.WriteNil();
             return;
         }
 
-        MessagePack.Formatters.GuidFormatter.Instance.Serialize(ref writer, Guid.Parse(str), MessagePackSerializerOptions.Standard);
+        ReadOnlySpan<char> chars = overflow is null ? buf[..len] : overflow.AsSpan();
+        MessagePack.Formatters.GuidFormatter.Instance.Serialize(ref writer, Guid.Parse(chars), MessagePackSerializerOptions.Standard);
     }
 }

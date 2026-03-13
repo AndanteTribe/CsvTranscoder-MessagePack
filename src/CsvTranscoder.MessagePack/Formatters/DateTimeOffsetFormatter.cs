@@ -9,14 +9,16 @@ public sealed class DateTimeOffsetFormatter : ICsvFormatter<DateTimeOffset>
 
     public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
     {
-        var str = reader.ReadString();
-        if (string.IsNullOrEmpty(str))
+        Span<char> buf = stackalloc char[64];
+        var overflow = reader.ReadChars(buf, out var len);
+        if (len == 0)
         {
             writer.WriteNil();
             return;
         }
 
-        var value = DateTimeOffset.Parse(str, CultureInfo.InvariantCulture);
+        ReadOnlySpan<char> chars = overflow is null ? buf[..len] : overflow.AsSpan();
+        var value = DateTimeOffset.Parse(chars, CultureInfo.InvariantCulture);
         MessagePack.Formatters.DateTimeOffsetFormatter.Instance.Serialize(ref writer, value, MessagePackSerializerOptions.Standard);
     }
 }

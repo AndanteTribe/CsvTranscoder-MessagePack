@@ -13,16 +13,13 @@ public sealed class StandardResolver : ICsvFormatterResolver
 {
     public static readonly StandardResolver Instance = new();
 
-    private static readonly Dictionary<Type, Type> ValueTupleFormatterTypes = new()
-    {
-        [typeof(ValueTuple<>)] = typeof(ValueTupleFormatter<>),
-        [typeof(ValueTuple<,>)] = typeof(ValueTupleFormatter<,>),
-        [typeof(ValueTuple<,,>)] = typeof(ValueTupleFormatter<,,>),
-        [typeof(ValueTuple<,,,>)] = typeof(ValueTupleFormatter<,,,>),
-        [typeof(ValueTuple<,,,,>)] = typeof(ValueTupleFormatter<,,,,>),
-        [typeof(ValueTuple<,,,,,>)] = typeof(ValueTupleFormatter<,,,,,>),
-        [typeof(ValueTuple<,,,,,,>)] = typeof(ValueTupleFormatter<,,,,,,>),
-    };
+    private static readonly RuntimeTypeHandle s_valueTuple1Handle = typeof(ValueTuple<>).TypeHandle;
+    private static readonly RuntimeTypeHandle s_valueTuple2Handle = typeof(ValueTuple<,>).TypeHandle;
+    private static readonly RuntimeTypeHandle s_valueTuple3Handle = typeof(ValueTuple<,,>).TypeHandle;
+    private static readonly RuntimeTypeHandle s_valueTuple4Handle = typeof(ValueTuple<,,,>).TypeHandle;
+    private static readonly RuntimeTypeHandle s_valueTuple5Handle = typeof(ValueTuple<,,,,>).TypeHandle;
+    private static readonly RuntimeTypeHandle s_valueTuple6Handle = typeof(ValueTuple<,,,,,>).TypeHandle;
+    private static readonly RuntimeTypeHandle s_valueTuple7Handle = typeof(ValueTuple<,,,,,,>).TypeHandle;
 
     private StandardResolver()
     {
@@ -76,7 +73,17 @@ public sealed class StandardResolver : ICsvFormatterResolver
                 return Cache<T>.Value;
             }
 
-            if (ValueTupleFormatterTypes.TryGetValue(def, out var formatterType))
+            var defHandle = def.TypeHandle;
+            Type? formatterType = null;
+            if (defHandle.Equals(s_valueTuple1Handle)) formatterType = typeof(ValueTupleFormatter<>);
+            else if (defHandle.Equals(s_valueTuple2Handle)) formatterType = typeof(ValueTupleFormatter<,>);
+            else if (defHandle.Equals(s_valueTuple3Handle)) formatterType = typeof(ValueTupleFormatter<,,>);
+            else if (defHandle.Equals(s_valueTuple4Handle)) formatterType = typeof(ValueTupleFormatter<,,,>);
+            else if (defHandle.Equals(s_valueTuple5Handle)) formatterType = typeof(ValueTupleFormatter<,,,,>);
+            else if (defHandle.Equals(s_valueTuple6Handle)) formatterType = typeof(ValueTupleFormatter<,,,,,>);
+            else if (defHandle.Equals(s_valueTuple7Handle)) formatterType = typeof(ValueTupleFormatter<,,,,,,>);
+
+            if (formatterType is not null)
             {
                 Cache<T>.Value = (ICsvFormatter<T>)Activator.CreateInstance(formatterType.MakeGenericType(typeof(T).GetGenericArguments()))!;
                 return Cache<T>.Value;

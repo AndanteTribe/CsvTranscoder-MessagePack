@@ -1,3 +1,4 @@
+using System.Globalization;
 using MessagePack;
 
 namespace AndanteTribe.Csv.Formatters;
@@ -8,14 +9,16 @@ public sealed class TimeSpanFormatter : ICsvFormatter<TimeSpan>
 
     public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
     {
-        var str = reader.ReadString();
-        if (string.IsNullOrEmpty(str))
+        Span<char> buf = stackalloc char[32];
+        var overflow = reader.ReadChars(buf, out var len);
+        if (len == 0)
         {
             writer.WriteNil();
             return;
         }
 
-        var value = TimeSpan.Parse(str, System.Globalization.CultureInfo.InvariantCulture);
+        ReadOnlySpan<char> chars = overflow is null ? buf[..len] : overflow.AsSpan();
+        var value = TimeSpan.Parse(chars, CultureInfo.InvariantCulture);
         MessagePack.Formatters.TimeSpanFormatter.Instance.Serialize(ref writer, value, MessagePackSerializerOptions.Standard);
     }
 }

@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-
 namespace AndanteTribe.Csv;
 
 /// <summary>
@@ -71,7 +69,12 @@ public static class CompositeResolver
     public static ICsvFormatterResolver Create(params ICsvFormatterResolver[] resolvers)
     {
         if (resolvers is null) throw new ArgumentNullException(nameof(resolvers));
-        return new ResolverN(resolvers.ToArray());
+        for (var i = 0; i < resolvers.Length; i++)
+        {
+            if (resolvers[i] is null) throw new ArgumentNullException($"{nameof(resolvers)}[{i}]");
+        }
+
+        return new ResolverN(resolvers);
     }
 
     private sealed class Resolver2(
@@ -112,29 +115,18 @@ public static class CompositeResolver
             => r1.GetFormatter<T>() ?? r2.GetFormatter<T>() ?? r3.GetFormatter<T>() ?? r4.GetFormatter<T>() ?? r5.GetFormatter<T>();
     }
 
-    private sealed class ResolverN : ICsvFormatterResolver
+    private sealed class ResolverN(ICsvFormatterResolver[] resolvers) : ICsvFormatterResolver
     {
-        private readonly ConcurrentDictionary<Type, object?> _formattersCache = new();
-        private readonly ICsvFormatterResolver[] _resolvers;
-
-        internal ResolverN(ICsvFormatterResolver[] resolvers)
-        {
-            _resolvers = resolvers;
-        }
-
         public ICsvFormatter<T>? GetFormatter<T>()
         {
-            return (ICsvFormatter<T>?)_formattersCache.GetOrAdd(typeof(T), static (_, resolvers) =>
+            foreach (var resolver in resolvers)
             {
-                foreach (var resolver in resolvers)
-                {
-                    var f = resolver.GetFormatter<T>();
-                    if (f is not null)
-                        return f;
-                }
+                var f = resolver.GetFormatter<T>();
+                if (f is not null)
+                    return f;
+            }
 
-                return null;
-            }, _resolvers);
+            return null;
         }
     }
 }

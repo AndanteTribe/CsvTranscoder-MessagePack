@@ -141,20 +141,16 @@ public class CompositeResolverTests
     }
 
     [Fact]
-    public void CreateN_CachesResultOnSubsequentCalls()
-    {
-        var resolver = CompositeResolver.Create(StandardResolver.Instance);
-
-        var first = resolver.GetFormatter<int>();
-        var second = resolver.GetFormatter<int>();
-
-        Assert.Same(first, second);
-    }
-
-    [Fact]
     public void CreateN_ThrowsForNullResolversArgument()
     {
         Assert.Throws<ArgumentNullException>(() => CompositeResolver.Create(null!));
+    }
+
+    [Fact]
+    public void CreateN_ThrowsForNullElementInArray()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            CompositeResolver.Create(StandardResolver.Instance, null!, StandardResolver.Instance));
     }
 
     [Theory]

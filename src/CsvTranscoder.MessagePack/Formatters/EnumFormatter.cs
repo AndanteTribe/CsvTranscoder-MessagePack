@@ -8,7 +8,7 @@ public sealed class EnumFormatter<T> : ICsvFormatter<T>
 {
     public static readonly EnumFormatter<T> Instance = new();
 
-    private static readonly TypeCode UnderlyingTypeCode = Type.GetTypeCode(Enum.GetUnderlyingType(typeof(T)));
+    private static readonly TypeCode s_underlyingTypeCode = Type.GetTypeCode(Enum.GetUnderlyingType(typeof(T)));
 
     public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
     {
@@ -20,7 +20,7 @@ public sealed class EnumFormatter<T> : ICsvFormatter<T>
             value = default;
         }
 
-        switch (UnderlyingTypeCode)
+        switch (s_underlyingTypeCode)
         {
             case TypeCode.SByte:
                 writer.Write(Unsafe.As<T, sbyte>(ref value));

@@ -1,6 +1,5 @@
 using GameKernel;
 using MessagePack;
-using MessagePack.Formatters;
 
 namespace AndanteTribe.Csv.Formatters;
 
@@ -14,9 +13,6 @@ public sealed class MasterIdCsvFormatter<TGroup> : ICsvFormatter<MasterId<TGroup
     where TGroup : unmanaged, Enum
 {
     public static readonly MasterIdCsvFormatter<TGroup> Instance = new();
-
-    private static readonly IMessagePackFormatter<MasterId<TGroup>> s_mpFormatter =
-        GameKernel.MessagePack.GameKernelResolver.Shared.GetFormatter<MasterId<TGroup>>()!;
 
     public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
     {
@@ -42,6 +38,7 @@ public sealed class MasterIdCsvFormatter<TGroup> : ICsvFormatter<MasterId<TGroup
         }
 
         var masterId = new MasterId<TGroup>(group, id);
-        s_mpFormatter.Serialize(ref writer, masterId, MessagePackSerializerOptions.Standard);
+        GameKernel.MessagePack.GameKernelResolver.Shared.GetFormatter<MasterId<TGroup>>()!
+            .Serialize(ref writer, masterId, MessagePackSerializerOptions.Standard);
     }
 }

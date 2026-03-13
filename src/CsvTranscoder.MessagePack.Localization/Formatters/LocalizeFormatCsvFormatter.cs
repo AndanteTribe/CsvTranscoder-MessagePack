@@ -1,6 +1,5 @@
 using Localization;
 using MessagePack;
-using MessagePack.Formatters;
 
 namespace AndanteTribe.Csv.Formatters;
 
@@ -13,13 +12,11 @@ public sealed class LocalizeFormatCsvFormatter : ICsvFormatter<LocalizeFormat>
 {
     public static readonly LocalizeFormatCsvFormatter Instance = new();
 
-    private static readonly IMessagePackFormatter<LocalizeFormat> s_mpFormatter =
-        Localization.MessagePack.LocalizationResolver.Shared.GetFormatter<LocalizeFormat>()!;
-
     public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
     {
         var str = reader.ReadString();
         var format = LocalizeFormat.Parse(str);
-        s_mpFormatter.Serialize(ref writer, format, MessagePackSerializerOptions.Standard);
+        Localization.MessagePack.LocalizationResolver.Shared.GetFormatter<LocalizeFormat>()!
+            .Serialize(ref writer, format, MessagePackSerializerOptions.Standard);
     }
 }

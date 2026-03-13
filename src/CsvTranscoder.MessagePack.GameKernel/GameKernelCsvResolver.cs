@@ -18,34 +18,29 @@ public sealed class GameKernelCsvResolver : ICsvFormatterResolver
 
     private static class Cache<T>
     {
-        public static ICsvFormatter<T>? Value;
+        public static readonly ICsvFormatter<T>? Value = GetFormatter(typeof(T)) as ICsvFormatter<T>;
     }
 
-    public ICsvFormatter<T>? GetFormatter<T>()
+    public ICsvFormatter<T>? GetFormatter<T>() => Cache<T>.Value;
+
+    private static object? GetFormatter(Type t)
     {
-        if (Cache<T>.Value is not null)
+        if (!t.IsGenericType)
         {
-            return Cache<T>.Value;
+            return null;
         }
 
-        if (typeof(T).IsGenericType)
+        var defHandle = t.GetGenericTypeDefinition().TypeHandle;
+        var args = t.GetGenericArguments();
+
+        if (defHandle.Equals(s_masterIdHandle))
         {
-            var defHandle = typeof(T).GetGenericTypeDefinition().TypeHandle;
-            var args = typeof(T).GetGenericArguments();
+            return Activator.CreateInstance(typeof(MasterIdCsvFormatter<>).MakeGenericType(args));
+        }
 
-            if (defHandle.Equals(s_masterIdHandle))
-            {
-                Cache<T>.Value = (ICsvFormatter<T>)Activator.CreateInstance(
-                    typeof(MasterIdCsvFormatter<>).MakeGenericType(args))!;
-                return Cache<T>.Value;
-            }
-
-            if (defHandle.Equals(s_obscuredHandle))
-            {
-                Cache<T>.Value = (ICsvFormatter<T>)Activator.CreateInstance(
-                    typeof(ObscuredCsvFormatter<>).MakeGenericType(args))!;
-                return Cache<T>.Value;
-            }
+        if (defHandle.Equals(s_obscuredHandle))
+        {
+            return Activator.CreateInstance(typeof(ObscuredCsvFormatter<>).MakeGenericType(args));
         }
 
         return null;

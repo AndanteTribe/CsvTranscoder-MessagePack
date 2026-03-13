@@ -10,7 +10,7 @@ public sealed class DateTimeFormatter : ICsvFormatter<DateTime>
 {
     public static readonly DateTimeFormatter Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         var field = reader.ReadRaw();
         using var owner = new FieldSpanOwner(in field, stackalloc byte[64]);

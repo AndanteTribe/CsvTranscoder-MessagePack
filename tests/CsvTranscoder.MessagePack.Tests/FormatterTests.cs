@@ -33,7 +33,7 @@ file static class FormatterTestHelper
         var reader = CreateReader(csvField + "\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        formatter.Transcode(ref writer, ref reader, opts);
+        formatter.Transcode(ref writer, ref reader);
         writer.Flush();
         return MessagePackSerializer.Deserialize<T>(buffer.WrittenMemory);
     }
@@ -280,7 +280,7 @@ public class TimeSpanFormatterTests
         var reader = FormatterTestHelper.CreateReader("\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        try { TimeSpanFormatter.Instance.Transcode(ref writer, ref reader, opts); Assert.Fail("Expected FormatException"); }
+        try { TimeSpanFormatter.Instance.Transcode(ref writer, ref reader); Assert.Fail("Expected FormatException"); }
         catch (FormatException) { }
     }
 }
@@ -306,7 +306,7 @@ public class GuidFormatterTests
         var reader = FormatterTestHelper.CreateReader("\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        try { GuidFormatter.Instance.Transcode(ref writer, ref reader, opts); Assert.Fail("Expected FormatException"); }
+        try { GuidFormatter.Instance.Transcode(ref writer, ref reader); Assert.Fail("Expected FormatException"); }
         catch (FormatException) { }
     }
 }
@@ -329,7 +329,7 @@ public class EnumFormatterTests
         var reader = FormatterTestHelper.CreateReader(input + "\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        EnumFormatter<SampleStatus>.Instance.Transcode(ref writer, ref reader, opts);
+        EnumFormatter<SampleStatus>.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<int>(buffer.WrittenMemory);
         Assert.Equal(expectedInt, result);
@@ -342,7 +342,7 @@ public class EnumFormatterTests
         var reader = FormatterTestHelper.CreateReader("NonExistent\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        EnumFormatter<SampleStatus>.Instance.Transcode(ref writer, ref reader, opts);
+        EnumFormatter<SampleStatus>.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<int>(buffer.WrittenMemory);
         Assert.Equal(0, result);
@@ -362,7 +362,7 @@ public class NullableFormatterTests
         var reader = FormatterTestHelper.CreateReader("\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        NullableFormatter<int>.Instance.Transcode(ref writer, ref reader, opts);
+        NullableFormatter<int>.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<int?>(buffer.WrittenMemory);
         Assert.Null(result);
@@ -384,8 +384,8 @@ public class NullableFormatterTests
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
 
-        NullableFormatter<int>.Instance.Transcode(ref writer, ref reader, opts);
-        Int32Formatter.Instance.Transcode(ref writer, ref reader, opts);
+        NullableFormatter<int>.Instance.Transcode(ref writer, ref reader);
+        Int32Formatter.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
 
         var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
@@ -540,7 +540,7 @@ public class DateTimeOffsetFormatterTests
         var reader = FormatterTestHelper.CreateReader("2024-06-15T12:30:00+09:00\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<DateTimeOffset>(buffer.WrittenMemory);
         var expected = new DateTimeOffset(2024, 6, 15, 12, 30, 0, TimeSpan.FromHours(9));
@@ -554,7 +554,7 @@ public class DateTimeOffsetFormatterTests
         var reader = FormatterTestHelper.CreateReader("2024-01-01T00:00:00+00:00\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<DateTimeOffset>(buffer.WrittenMemory);
         Assert.Equal(DateTimeOffset.UnixEpoch.AddYears(54), result);
@@ -567,7 +567,7 @@ public class DateTimeOffsetFormatterTests
         var reader = FormatterTestHelper.CreateReader("\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        try { DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader, opts); Assert.Fail("Expected FormatException"); }
+        try { DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader); Assert.Fail("Expected FormatException"); }
         catch (FormatException) { }
     }
 }
@@ -585,7 +585,7 @@ public class UriFormatterTests
         var reader = FormatterTestHelper.CreateReader("https://example.com/path?q=1\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        UriFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        UriFormatter.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<Uri>(buffer.WrittenMemory);
         Assert.Equal(new Uri("https://example.com/path?q=1"), result);
@@ -598,7 +598,7 @@ public class UriFormatterTests
         var reader = FormatterTestHelper.CreateReader("\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        UriFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        UriFormatter.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
         Assert.True(msgpackReader.TryReadNil());
@@ -618,7 +618,7 @@ public class VersionFormatterTests
         var reader = FormatterTestHelper.CreateReader("1.2.3.4\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        VersionFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        VersionFormatter.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<Version>(buffer.WrittenMemory);
         Assert.Equal(new Version(1, 2, 3, 4), result);
@@ -631,7 +631,7 @@ public class VersionFormatterTests
         var reader = FormatterTestHelper.CreateReader("\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        VersionFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        VersionFormatter.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
         Assert.True(msgpackReader.TryReadNil());
@@ -657,7 +657,7 @@ public class ValueTupleFormatterTests
         var reader = FormatterTestHelper.CreateReader("42\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        ValueTupleFormatter<int>.Instance.Transcode(ref writer, ref reader, opts);
+        ValueTupleFormatter<int>.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<ValueTuple<int>>(buffer.WrittenMemory);
         Assert.Equal(new ValueTuple<int>(42), result);
@@ -670,7 +670,7 @@ public class ValueTupleFormatterTests
         var reader = FormatterTestHelper.CreateReader("42,hello\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        ValueTupleFormatter<int, string>.Instance.Transcode(ref writer, ref reader, opts);
+        ValueTupleFormatter<int, string>.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<(int, string)>(buffer.WrittenMemory);
         Assert.Equal((42, "hello"), result);
@@ -683,7 +683,7 @@ public class ValueTupleFormatterTests
         var reader = FormatterTestHelper.CreateReader("1,2,3\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        ValueTupleFormatter<int, int, int>.Instance.Transcode(ref writer, ref reader, opts);
+        ValueTupleFormatter<int, int, int>.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<(int, int, int)>(buffer.WrittenMemory);
         Assert.Equal((1, 2, 3), result);
@@ -696,7 +696,7 @@ public class ValueTupleFormatterTests
         var reader = FormatterTestHelper.CreateReader("1,2,3,4\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        ValueTupleFormatter<int, int, int, int>.Instance.Transcode(ref writer, ref reader, opts);
+        ValueTupleFormatter<int, int, int, int>.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<(int, int, int, int)>(buffer.WrittenMemory);
         Assert.Equal((1, 2, 3, 4), result);
@@ -709,7 +709,7 @@ public class ValueTupleFormatterTests
         var reader = FormatterTestHelper.CreateReader("1,hello,true,42,3.14,2024-01-01T00:00:00.0000000Z,a\n", opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        ValueTupleFormatter<int, string, bool, long, double, DateTime, char>.Instance.Transcode(ref writer, ref reader, opts);
+        ValueTupleFormatter<int, string, bool, long, double, DateTime, char>.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         var result = MessagePackSerializer.Deserialize<(int, string, bool, long, double, DateTime, char)>(buffer.WrittenMemory);
         Assert.Equal(1, result.Item1);

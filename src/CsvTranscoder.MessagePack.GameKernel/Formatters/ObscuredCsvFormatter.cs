@@ -14,9 +14,9 @@ public sealed class ObscuredCsvFormatter<T> : ICsvFormatter<Obscured<T>>
 {
     public static readonly ObscuredCsvFormatter<T> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         writer.WriteArrayHeader(1);
-        options.Resolver.GetFormatterWithVerify<T>().Transcode(ref writer, ref reader, options);
+        reader.Options.Resolver.GetFormatterWithVerify<T>().Transcode(ref writer, ref reader);
     }
 }

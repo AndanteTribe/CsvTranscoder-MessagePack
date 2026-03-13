@@ -7,7 +7,7 @@ public sealed class GuidFormatter : ICsvFormatter<Guid>
 {
     public static readonly GuidFormatter Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         var field = reader.ReadRaw();
         if (field.IsEmpty)

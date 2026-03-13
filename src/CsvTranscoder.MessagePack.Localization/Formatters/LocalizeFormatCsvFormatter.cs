@@ -12,7 +12,7 @@ public sealed class LocalizeFormatCsvFormatter : ICsvFormatter<LocalizeFormat>
 {
     public static readonly LocalizeFormatCsvFormatter Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         var str = reader.ReadString();
         var format = LocalizeFormat.Parse(str);

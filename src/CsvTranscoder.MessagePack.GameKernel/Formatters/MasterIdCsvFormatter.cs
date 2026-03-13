@@ -14,7 +14,7 @@ public sealed class MasterIdCsvFormatter<TGroup> : ICsvFormatter<MasterId<TGroup
 {
     public static readonly MasterIdCsvFormatter<TGroup> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         var str = reader.ReadString();
 

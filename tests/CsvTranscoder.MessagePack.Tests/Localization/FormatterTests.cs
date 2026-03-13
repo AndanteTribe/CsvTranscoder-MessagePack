@@ -41,7 +41,7 @@ file static class FormatterTestHelper
         var reader = new CsvReader(new ReadOnlySequence<byte>(bytes), opts);
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
-        formatter.Transcode(ref writer, ref reader, opts);
+        formatter.Transcode(ref writer, ref reader);
         writer.Flush();
         return MessagePackSerializer.Deserialize<T>(buffer.WrittenMemory, mpOptions ?? LocalizationMpOptions);
     }

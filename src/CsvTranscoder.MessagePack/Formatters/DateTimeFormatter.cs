@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Text;
 using System.Globalization;
 using System.Text;
@@ -28,9 +29,10 @@ public sealed class DateTimeFormatter : ICsvFormatter<DateTime>
         }
 
         // Fall back to char-based parsing for formats not handled by Utf8Parser (e.g. "yyyy/MM/dd HH:mm:ss").
-        // Use a fixed 64-char stack buffer; fall back to string allocation for unusually large fields.
+        // Use a fixed 64-char stack buffer; rent from ArrayPool for unusually large fields.
         Span<char> text = stackalloc char[64];
-        if (Encoding.UTF8.GetCharCount(span) <= 64 && Encoding.UTF8.TryGetChars(span, text, out var written))
+        var charCount = Encoding.UTF8.GetCharCount(span);
+        if (charCount <= 64 && Encoding.UTF8.TryGetChars(span, text, out var written))
         {
             if (DateTime.TryParse(text[..written], CultureInfo.InvariantCulture, DateTimeStyles.None, out value))
             {
@@ -40,11 +42,19 @@ public sealed class DateTimeFormatter : ICsvFormatter<DateTime>
         }
         else
         {
-            var str = Encoding.UTF8.GetString(span);
-            if (DateTime.TryParse(str, CultureInfo.InvariantCulture, DateTimeStyles.None, out value))
+            var pooled = ArrayPool<char>.Shared.Rent(charCount);
+            try
             {
-                writer.Write(value);
-                return;
+                written = Encoding.UTF8.GetChars(span, pooled);
+                if (DateTime.TryParse(pooled.AsSpan(0, written), CultureInfo.InvariantCulture, DateTimeStyles.None, out value))
+                {
+                    writer.Write(value);
+                    return;
+                }
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(pooled);
             }
         }
 

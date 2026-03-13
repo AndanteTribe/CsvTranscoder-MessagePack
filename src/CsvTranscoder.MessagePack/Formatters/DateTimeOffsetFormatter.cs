@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 using MessagePack;
@@ -17,16 +18,26 @@ public sealed class DateTimeOffsetFormatter : ICsvFormatter<DateTimeOffset>
         using var owner = new FieldSpanOwner(in field, stackalloc byte[64]);
         var span = owner.Span;
 
-        // Use a fixed 64-char stack buffer; fall back to string allocation for unusually large fields.
+        // Use a fixed 64-char stack buffer; rent from ArrayPool for unusually large fields.
         Span<char> charBuf = stackalloc char[64];
         DateTimeOffset value;
-        if (Encoding.UTF8.GetCharCount(span) <= 64 && Encoding.UTF8.TryGetChars(span, charBuf, out var written))
+        var charCount = Encoding.UTF8.GetCharCount(span);
+        if (charCount <= 64 && Encoding.UTF8.TryGetChars(span, charBuf, out var written))
         {
             value = DateTimeOffset.Parse(charBuf[..written], CultureInfo.InvariantCulture);
         }
         else
         {
-            value = DateTimeOffset.Parse(Encoding.UTF8.GetString(span), CultureInfo.InvariantCulture);
+            var pooled = ArrayPool<char>.Shared.Rent(charCount);
+            try
+            {
+                written = Encoding.UTF8.GetChars(span, pooled);
+                value = DateTimeOffset.Parse(pooled.AsSpan(0, written), CultureInfo.InvariantCulture);
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(pooled);
+            }
         }
 
         MessagePack.Formatters.DateTimeOffsetFormatter.Instance.Serialize(ref writer, value, MessagePackSerializerOptions.Standard);

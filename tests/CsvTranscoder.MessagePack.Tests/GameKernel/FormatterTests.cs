@@ -173,4 +173,13 @@ public class GameKernelCsvResolverTests
         var formatter2 = GameKernelCsvResolver.Instance.GetFormatter<MasterId<TestGroup>>();
         Assert.Same(formatter1, formatter2);
     }
+
+    [Fact]
+    public void GameKernelCsvResolver_GetFormatter_UnknownGenericType_ReturnsNull()
+    {
+        // A generic type that is neither MasterId<> nor Obscured<> exercises the false branch
+        // of the Obscured check (line ~41) and reaches the final "return null" (line 46).
+        var formatter = GameKernelCsvResolver.Instance.GetFormatter<System.Collections.Generic.List<int>>();
+        Assert.Null(formatter);
+    }
 }

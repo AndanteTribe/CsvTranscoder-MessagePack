@@ -258,3 +258,72 @@ public class FormatterResolverExtensionsTests
         Assert.Throws<InvalidOperationException>(() => StandardResolver.Instance.GetFormatterWithVerify<object>());
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DateTimeFormatter — long-string path (charCount > 64, else branch)
+//  Note: CsvReader and MessagePackWriter are ref structs; try/catch is used
+//  where Assert.Throws cannot capture ref struct operands in a lambda.
+// ═══════════════════════════════════════════════════════════════════════
+
+public class DateTimeFormatterLongStringTests
+{
+    [Fact]
+    public void DateTimeFormatter_LongString_ThrowsFormatException()
+    {
+        // A 65-char string is longer than the 64-char stack buffer, so the ArrayPool fallback
+        // path (else branch, lines 45-58) is taken; the value is unparseable → FormatException.
+        var input = new string('x', 65);
+        var opts = CoverageTestHelper.SimpleOptions;
+        var reader = CoverageTestHelper.CreateReader(input + "\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        try { DateTimeFormatter.Instance.Transcode(ref writer, ref reader); Assert.Fail("Expected FormatException"); }
+        catch (FormatException) { }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DateTimeOffsetFormatter — long-string path (charCount > 64, else branch)
+//  Note: CsvReader and MessagePackWriter are ref structs; try/catch is used
+//  where Assert.Throws cannot capture ref struct operands in a lambda.
+// ═══════════════════════════════════════════════════════════════════════
+
+public class DateTimeOffsetFormatterLongStringTests
+{
+    [Fact]
+    public void DateTimeOffsetFormatter_LongString_ThrowsFormatException()
+    {
+        // A 65-char string exceeds the 64-char stack buffer, exercising the ArrayPool
+        // fallback path (else branch, lines 31-40); DateTimeOffset.Parse throws.
+        var input = new string('x', 65);
+        var opts = CoverageTestHelper.SimpleOptions;
+        var reader = CoverageTestHelper.CreateReader(input + "\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        try { DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader); Assert.Fail("Expected FormatException"); }
+        catch (FormatException) { }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  TimeSpanFormatter — long-string path (charCount > 64, else branch)
+//  Note: CsvReader and MessagePackWriter are ref structs; try/catch is used
+//  where Assert.Throws cannot capture ref struct operands in a lambda.
+// ═══════════════════════════════════════════════════════════════════════
+
+public class TimeSpanFormatterLongStringTests
+{
+    [Fact]
+    public void TimeSpanFormatter_LongString_ThrowsFormatException()
+    {
+        // A 65-char string exceeds the 64-char stack buffer, exercising the ArrayPool
+        // fallback path (else branch, lines 31-40); TimeSpan.Parse throws.
+        var input = new string('x', 65);
+        var opts = CoverageTestHelper.SimpleOptions;
+        var reader = CoverageTestHelper.CreateReader(input + "\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        try { TimeSpanFormatter.Instance.Transcode(ref writer, ref reader); Assert.Fail("Expected FormatException"); }
+        catch (FormatException) { }
+    }
+}

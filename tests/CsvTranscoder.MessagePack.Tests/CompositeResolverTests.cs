@@ -149,8 +149,11 @@ public class CompositeResolverTests
     [Fact]
     public void CreateN_ThrowsForNullElementInArray()
     {
+        // 6 args forces the params overload (fixed overloads only go up to 5),
+        // so the per-element null validation loop inside Create(params...) is exercised.
+        var r = StandardResolver.Instance;
         Assert.Throws<ArgumentNullException>(() =>
-            CompositeResolver.Create(StandardResolver.Instance, null!, StandardResolver.Instance));
+            CompositeResolver.Create(r, r, r, r, r, null!));
     }
 
     [Theory]

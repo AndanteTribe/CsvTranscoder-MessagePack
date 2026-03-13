@@ -15,7 +15,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AndanteTribe.GameKernel.MessagePack" Version="1.0.0" />
+    <PackageReference Include="AndanteTribe.Localization.MessagePack" Version="1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\CsvTranscoder.MessagePack\CsvTranscoder.MessagePack.csproj" />
+    <ProjectReference Include="..\..\src\CsvTranscoder.MessagePack.GameKernel\CsvTranscoder.MessagePack.GameKernel.csproj" />
+    <ProjectReference Include="..\..\src\CsvTranscoder.MessagePack.Localization\CsvTranscoder.MessagePack.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

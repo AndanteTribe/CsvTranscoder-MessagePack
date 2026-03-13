@@ -76,6 +76,42 @@ public class CompositeResolverTests
     }
 
     [Fact]
+    public void Create3_ReturnsNullWhenNoResolverSupportsType()
+    {
+        var r1 = new SingleFormatterResolver<string>(StringFormatter.Instance);
+        var r2 = new SingleFormatterResolver<int>(Int32Formatter.Instance);
+        var r3 = new SingleFormatterResolver<bool>(BooleanFormatter.Instance);
+        var resolver = CompositeResolver.Create(r1, r2, r3);
+
+        Assert.Null(resolver.GetFormatter<double>());
+    }
+
+    [Fact]
+    public void Create4_ReturnsNullWhenNoResolverSupportsType()
+    {
+        var r1 = new SingleFormatterResolver<string>(StringFormatter.Instance);
+        var r2 = new SingleFormatterResolver<int>(Int32Formatter.Instance);
+        var r3 = new SingleFormatterResolver<bool>(BooleanFormatter.Instance);
+        var r4 = new SingleFormatterResolver<double>(DoubleFormatter.Instance);
+        var resolver = CompositeResolver.Create(r1, r2, r3, r4);
+
+        Assert.Null(resolver.GetFormatter<long>());
+    }
+
+    [Fact]
+    public void Create5_ReturnsNullWhenNoResolverSupportsType()
+    {
+        var r1 = new SingleFormatterResolver<string>(StringFormatter.Instance);
+        var r2 = new SingleFormatterResolver<int>(Int32Formatter.Instance);
+        var r3 = new SingleFormatterResolver<bool>(BooleanFormatter.Instance);
+        var r4 = new SingleFormatterResolver<double>(DoubleFormatter.Instance);
+        var r5 = new SingleFormatterResolver<long>(Int64Formatter.Instance);
+        var resolver = CompositeResolver.Create(r1, r2, r3, r4, r5);
+
+        Assert.Null(resolver.GetFormatter<float>());
+    }
+
+    [Fact]
     public void Create_FirstResolverTakesPriorityOverSecond()
     {
         var firstFormatter = new CustomStringFormatter("first");
@@ -119,6 +155,70 @@ public class CompositeResolverTests
     public void CreateN_ThrowsForNullResolversArgument()
     {
         Assert.Throws<ArgumentNullException>(() => CompositeResolver.Create(null!));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Create2_ThrowsForNullArgument(int nullPosition)
+    {
+        var r = StandardResolver.Instance;
+        Assert.Throws<ArgumentNullException>(() => nullPosition switch
+        {
+            1 => CompositeResolver.Create(null!, r),
+            _ => CompositeResolver.Create(r, null!),
+        });
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Create3_ThrowsForNullArgument(int nullPosition)
+    {
+        var r = StandardResolver.Instance;
+        Assert.Throws<ArgumentNullException>(() => nullPosition switch
+        {
+            1 => CompositeResolver.Create(null!, r, r),
+            2 => CompositeResolver.Create(r, null!, r),
+            _ => CompositeResolver.Create(r, r, null!),
+        });
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void Create4_ThrowsForNullArgument(int nullPosition)
+    {
+        var r = StandardResolver.Instance;
+        Assert.Throws<ArgumentNullException>(() => nullPosition switch
+        {
+            1 => CompositeResolver.Create(null!, r, r, r),
+            2 => CompositeResolver.Create(r, null!, r, r),
+            3 => CompositeResolver.Create(r, r, null!, r),
+            _ => CompositeResolver.Create(r, r, r, null!),
+        });
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void Create5_ThrowsForNullArgument(int nullPosition)
+    {
+        var r = StandardResolver.Instance;
+        Assert.Throws<ArgumentNullException>(() => nullPosition switch
+        {
+            1 => CompositeResolver.Create(null!, r, r, r, r),
+            2 => CompositeResolver.Create(r, null!, r, r, r),
+            3 => CompositeResolver.Create(r, r, null!, r, r),
+            4 => CompositeResolver.Create(r, r, r, null!, r),
+            _ => CompositeResolver.Create(r, r, r, r, null!),
+        });
     }
 
     // ─── helper types ───────────────────────────────────────────────────────────

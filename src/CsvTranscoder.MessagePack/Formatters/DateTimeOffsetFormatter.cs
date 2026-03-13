@@ -9,7 +9,7 @@ public sealed class DateTimeOffsetFormatter : ICsvFormatter<DateTimeOffset>
 {
     public static readonly DateTimeOffsetFormatter Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         var field = reader.ReadRaw();
         if (field.IsEmpty)

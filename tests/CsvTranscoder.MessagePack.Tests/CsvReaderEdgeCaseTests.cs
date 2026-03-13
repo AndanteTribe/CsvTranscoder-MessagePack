@@ -386,7 +386,7 @@ public class FieldSpanOwnerViaMultiSegmentTests
         var buffer = new ArrayBufferWriter<byte>();
         var writer = new MessagePackWriter(buffer);
         var reader = new CsvReader(seq, opts);
-        BooleanFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        BooleanFormatter.Instance.Transcode(ref writer, ref reader);
         writer.Flush();
         Assert.True(MessagePackSerializer.Deserialize<bool>(buffer.WrittenMemory));
     }

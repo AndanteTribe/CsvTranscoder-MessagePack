@@ -7,7 +7,7 @@ public sealed class NullableFormatter<T> : ICsvFormatter<T?>
 {
     public static readonly NullableFormatter<T> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         if (reader.IsNextFieldEmpty())
         {
@@ -16,6 +16,6 @@ public sealed class NullableFormatter<T> : ICsvFormatter<T?>
             return;
         }
 
-        options.Resolver.GetFormatterWithVerify<T>().Transcode(ref writer, ref reader, options);
+        reader.Options.Resolver.GetFormatterWithVerify<T>().Transcode(ref writer, ref reader);
     }
 }

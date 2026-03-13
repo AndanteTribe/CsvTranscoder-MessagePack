@@ -6,10 +6,10 @@ public sealed class ValueTupleFormatter<T1> : ICsvFormatter<ValueTuple<T1>>
 {
     public static readonly ValueTupleFormatter<T1> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         writer.WriteArrayHeader(1);
-        options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader, options);
+        reader.Options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader);
     }
 }
 
@@ -17,11 +17,11 @@ public sealed class ValueTupleFormatter<T1, T2> : ICsvFormatter<ValueTuple<T1, T
 {
     public static readonly ValueTupleFormatter<T1, T2> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         writer.WriteArrayHeader(2);
-        options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader, options);
+        reader.Options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader);
     }
 }
 
@@ -29,12 +29,12 @@ public sealed class ValueTupleFormatter<T1, T2, T3> : ICsvFormatter<ValueTuple<T
 {
     public static readonly ValueTupleFormatter<T1, T2, T3> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         writer.WriteArrayHeader(3);
-        options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader, options);
+        reader.Options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader);
     }
 }
 
@@ -42,13 +42,13 @@ public sealed class ValueTupleFormatter<T1, T2, T3, T4> : ICsvFormatter<ValueTup
 {
     public static readonly ValueTupleFormatter<T1, T2, T3, T4> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         writer.WriteArrayHeader(4);
-        options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T4>().Transcode(ref writer, ref reader, options);
+        reader.Options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T4>().Transcode(ref writer, ref reader);
     }
 }
 
@@ -56,14 +56,14 @@ public sealed class ValueTupleFormatter<T1, T2, T3, T4, T5> : ICsvFormatter<Valu
 {
     public static readonly ValueTupleFormatter<T1, T2, T3, T4, T5> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         writer.WriteArrayHeader(5);
-        options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T4>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T5>().Transcode(ref writer, ref reader, options);
+        reader.Options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T4>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T5>().Transcode(ref writer, ref reader);
     }
 }
 
@@ -71,15 +71,15 @@ public sealed class ValueTupleFormatter<T1, T2, T3, T4, T5, T6> : ICsvFormatter<
 {
     public static readonly ValueTupleFormatter<T1, T2, T3, T4, T5, T6> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         writer.WriteArrayHeader(6);
-        options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T4>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T5>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T6>().Transcode(ref writer, ref reader, options);
+        reader.Options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T4>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T5>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T6>().Transcode(ref writer, ref reader);
     }
 }
 
@@ -87,15 +87,15 @@ public sealed class ValueTupleFormatter<T1, T2, T3, T4, T5, T6, T7> : ICsvFormat
 {
     public static readonly ValueTupleFormatter<T1, T2, T3, T4, T5, T6, T7> Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         writer.WriteArrayHeader(7);
-        options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T4>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T5>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T6>().Transcode(ref writer, ref reader, options);
-        options.Resolver.GetFormatterWithVerify<T7>().Transcode(ref writer, ref reader, options);
+        reader.Options.Resolver.GetFormatterWithVerify<T1>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T2>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T3>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T4>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T5>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T6>().Transcode(ref writer, ref reader);
+        reader.Options.Resolver.GetFormatterWithVerify<T7>().Transcode(ref writer, ref reader);
     }
 }

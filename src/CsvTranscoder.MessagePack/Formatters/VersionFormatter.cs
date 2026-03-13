@@ -6,7 +6,7 @@ public sealed class VersionFormatter : ICsvFormatter<Version?>
 {
     public static readonly VersionFormatter Instance = new();
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         var str = reader.ReadString();
         if (string.IsNullOrEmpty(str))

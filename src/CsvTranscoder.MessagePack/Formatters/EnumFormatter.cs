@@ -10,7 +10,7 @@ public sealed class EnumFormatter<T> : ICsvFormatter<T>
 
     private static readonly TypeCode s_underlyingTypeCode = Type.GetTypeCode(Enum.GetUnderlyingType(typeof(T)));
 
-    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
+    public void Transcode(ref MessagePackWriter writer, ref CsvReader reader)
     {
         var str = reader.ReadString();
         T value;

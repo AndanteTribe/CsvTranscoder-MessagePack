@@ -232,7 +232,7 @@ public class CompositeResolverTests
     {
         public string Tag => tag;
 
-        public void Transcode(ref global::MessagePack.MessagePackWriter writer, ref CsvReader reader, CsvTranscodeOptions options)
-            => StringFormatter.Instance.Transcode(ref writer, ref reader, options);
+        public void Transcode(ref global::MessagePack.MessagePackWriter writer, ref CsvReader reader)
+            => StringFormatter.Instance.Transcode(ref writer, ref reader);
     }
 }

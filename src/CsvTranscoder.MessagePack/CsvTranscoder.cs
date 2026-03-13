@@ -35,7 +35,7 @@ public static class CsvTranscoder
         {
             do
             {
-                formatter.Transcode(ref bodyWriter, ref reader, options);
+                formatter.Transcode(ref bodyWriter, ref reader);
                 count++;
             }
             while (reader.TryAdvanceToNextRow());

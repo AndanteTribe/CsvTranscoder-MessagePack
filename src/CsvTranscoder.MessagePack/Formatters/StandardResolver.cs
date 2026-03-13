@@ -4,12 +4,25 @@ namespace AndanteTribe.Csv;
 
 /// <summary>
 /// A built-in <see cref="ICsvFormatterResolver"/> that provides formatters for standard .NET types.
-/// Supports all primitive types, <see cref="DateTime"/>, <see cref="TimeSpan"/>, <see cref="Guid"/>,
-/// <see cref="decimal"/>, <see cref="char"/>, <see cref="string"/>, enum types, and <see cref="Nullable{T}"/> wrappers.
+/// Supports all primitive types, <see cref="DateTime"/>, <see cref="DateTimeOffset"/>,
+/// <see cref="TimeSpan"/>, <see cref="Guid"/>, <see cref="Uri"/>, <see cref="Version"/>,
+/// <see cref="decimal"/>, <see cref="char"/>, <see cref="string"/>, enum types,
+/// <see cref="Nullable{T}"/> wrappers, and <see cref="ValueTuple"/> types with up to 7 elements.
 /// </summary>
 public sealed class StandardResolver : ICsvFormatterResolver
 {
     public static readonly StandardResolver Instance = new();
+
+    private static readonly Dictionary<Type, Type> ValueTupleFormatterTypes = new()
+    {
+        [typeof(ValueTuple<>)] = typeof(ValueTupleFormatter<>),
+        [typeof(ValueTuple<,>)] = typeof(ValueTupleFormatter<,>),
+        [typeof(ValueTuple<,,>)] = typeof(ValueTupleFormatter<,,>),
+        [typeof(ValueTuple<,,,>)] = typeof(ValueTupleFormatter<,,,>),
+        [typeof(ValueTuple<,,,,>)] = typeof(ValueTupleFormatter<,,,,>),
+        [typeof(ValueTuple<,,,,,>)] = typeof(ValueTupleFormatter<,,,,,>),
+        [typeof(ValueTuple<,,,,,,>)] = typeof(ValueTupleFormatter<,,,,,,>),
+    };
 
     private StandardResolver()
     {
@@ -28,8 +41,11 @@ public sealed class StandardResolver : ICsvFormatterResolver
         Cache<char>.Value = CharFormatter.Instance;
         Cache<string>.Value = StringFormatter.Instance;
         Cache<DateTime>.Value = DateTimeFormatter.Instance;
+        Cache<DateTimeOffset>.Value = DateTimeOffsetFormatter.Instance;
         Cache<TimeSpan>.Value = TimeSpanFormatter.Instance;
         Cache<Guid>.Value = GuidFormatter.Instance;
+        Cache<Uri?>.Value = UriFormatter.Instance;
+        Cache<Version?>.Value = VersionFormatter.Instance;
     }
 
     private static class Cache<T>
@@ -50,10 +66,21 @@ public sealed class StandardResolver : ICsvFormatterResolver
             return Cache<T>.Value;
         }
 
-        if (typeof(T).IsGenericType && typeof(T).GetGenericTypeDefinition() == typeof(Nullable<>))
+        if (typeof(T).IsGenericType)
         {
-            Cache<T>.Value = (ICsvFormatter<T>)Activator.CreateInstance(typeof(NullableFormatter<>).MakeGenericType(Nullable.GetUnderlyingType(typeof(T))!))!;
-            return Cache<T>.Value;
+            var def = typeof(T).GetGenericTypeDefinition();
+
+            if (def == typeof(Nullable<>))
+            {
+                Cache<T>.Value = (ICsvFormatter<T>)Activator.CreateInstance(typeof(NullableFormatter<>).MakeGenericType(Nullable.GetUnderlyingType(typeof(T))!))!;
+                return Cache<T>.Value;
+            }
+
+            if (ValueTupleFormatterTypes.TryGetValue(def, out var formatterType))
+            {
+                Cache<T>.Value = (ICsvFormatter<T>)Activator.CreateInstance(formatterType.MakeGenericType(typeof(T).GetGenericArguments()))!;
+                return Cache<T>.Value;
+            }
         }
 
         return null;

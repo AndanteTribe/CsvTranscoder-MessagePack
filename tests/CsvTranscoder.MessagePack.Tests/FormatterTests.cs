@@ -423,8 +423,11 @@ public class StandardResolverTests
         Assert.NotNull(resolver.GetFormatter<char>());
         Assert.NotNull(resolver.GetFormatter<string>());
         Assert.NotNull(resolver.GetFormatter<DateTime>());
+        Assert.NotNull(resolver.GetFormatter<DateTimeOffset>());
         Assert.NotNull(resolver.GetFormatter<TimeSpan>());
         Assert.NotNull(resolver.GetFormatter<Guid>());
+        Assert.NotNull(resolver.GetFormatter<Uri?>());
+        Assert.NotNull(resolver.GetFormatter<Version?>());
     }
 
     [Fact]
@@ -499,5 +502,224 @@ public class IsNextFieldEmptyTests
         var reader = FormatterTestHelper.CreateReader("1,\n", Opts);
         reader.ReadInt32(); // reads "1" and advances past separator
         Assert.True(reader.IsNextFieldEmpty());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DateTimeOffset formatter
+// ═══════════════════════════════════════════════════════════════════════
+
+public class DateTimeOffsetFormatterTests
+{
+    [Fact]
+    public void DateTimeOffsetFormatter_ISO8601WithOffset_Roundtrip()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("2024-06-15T12:30:00+09:00\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<DateTimeOffset>(buffer.WrittenMemory);
+        var expected = new DateTimeOffset(2024, 6, 15, 12, 30, 0, TimeSpan.FromHours(9));
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void DateTimeOffsetFormatter_UTC_Roundtrip()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("2024-01-01T00:00:00+00:00\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<DateTimeOffset>(buffer.WrittenMemory);
+        Assert.Equal(DateTimeOffset.UnixEpoch.AddYears(54), result);
+    }
+
+    [Fact]
+    public void DateTimeOffsetFormatter_EmptyField_WritesNil()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        DateTimeOffsetFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
+        Assert.True(msgpackReader.TryReadNil());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Uri formatter
+// ═══════════════════════════════════════════════════════════════════════
+
+public class UriFormatterTests
+{
+    [Fact]
+    public void UriFormatter_AbsoluteUri_Roundtrip()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("https://example.com/path?q=1\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        UriFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<Uri>(buffer.WrittenMemory);
+        Assert.Equal(new Uri("https://example.com/path?q=1"), result);
+    }
+
+    [Fact]
+    public void UriFormatter_EmptyField_WritesNil()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        UriFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
+        Assert.True(msgpackReader.TryReadNil());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Version formatter
+// ═══════════════════════════════════════════════════════════════════════
+
+public class VersionFormatterTests
+{
+    [Fact]
+    public void VersionFormatter_Version_Roundtrip()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("1.2.3.4\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        VersionFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<Version>(buffer.WrittenMemory);
+        Assert.Equal(new Version(1, 2, 3, 4), result);
+    }
+
+    [Fact]
+    public void VersionFormatter_EmptyField_WritesNil()
+    {
+        var opts = FormatterTestHelper.SimpleOptions;
+        var reader = FormatterTestHelper.CreateReader("\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        VersionFormatter.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var msgpackReader = new MessagePackReader(new ReadOnlySequence<byte>(buffer.WrittenMemory));
+        Assert.True(msgpackReader.TryReadNil());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ValueTuple formatters
+// ═══════════════════════════════════════════════════════════════════════
+
+public class ValueTupleFormatterTests
+{
+    private static CsvTranscodeOptions Opts => new()
+    {
+        HasHeader = false, AllowColumnComments = false, AllowRowComments = false,
+        NewLine = "\n", Separator = ','
+    };
+
+    [Fact]
+    public void ValueTupleFormatter1_Roundtrip()
+    {
+        var opts = Opts;
+        var reader = FormatterTestHelper.CreateReader("42\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        ValueTupleFormatter<int>.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<ValueTuple<int>>(buffer.WrittenMemory);
+        Assert.Equal(new ValueTuple<int>(42), result);
+    }
+
+    [Fact]
+    public void ValueTupleFormatter2_Roundtrip()
+    {
+        var opts = Opts;
+        var reader = FormatterTestHelper.CreateReader("42,hello\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        ValueTupleFormatter<int, string>.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<(int, string)>(buffer.WrittenMemory);
+        Assert.Equal((42, "hello"), result);
+    }
+
+    [Fact]
+    public void ValueTupleFormatter3_Roundtrip()
+    {
+        var opts = Opts;
+        var reader = FormatterTestHelper.CreateReader("1,2,3\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        ValueTupleFormatter<int, int, int>.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<(int, int, int)>(buffer.WrittenMemory);
+        Assert.Equal((1, 2, 3), result);
+    }
+
+    [Fact]
+    public void ValueTupleFormatter4_Roundtrip()
+    {
+        var opts = Opts;
+        var reader = FormatterTestHelper.CreateReader("1,2,3,4\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        ValueTupleFormatter<int, int, int, int>.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<(int, int, int, int)>(buffer.WrittenMemory);
+        Assert.Equal((1, 2, 3, 4), result);
+    }
+
+    [Fact]
+    public void ValueTupleFormatter7_MixedTypes_Roundtrip()
+    {
+        var opts = Opts;
+        var reader = FormatterTestHelper.CreateReader("1,hello,true,42,3.14,2024-01-01T00:00:00.0000000Z,a\n", opts);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        ValueTupleFormatter<int, string, bool, long, double, DateTime, char>.Instance.Transcode(ref writer, ref reader, opts);
+        writer.Flush();
+        var result = MessagePackSerializer.Deserialize<(int, string, bool, long, double, DateTime, char)>(buffer.WrittenMemory);
+        Assert.Equal(1, result.Item1);
+        Assert.Equal("hello", result.Item2);
+        Assert.True(result.Item3);
+        Assert.Equal(42L, result.Item4);
+        Assert.Equal(3.14, result.Item5, 5);
+        Assert.Equal(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), result.Item6);
+        Assert.Equal('a', result.Item7);
+    }
+
+    [Fact]
+    public void StandardResolver_GetFormatter_ReturnsFormatterForValueTuple()
+    {
+        var resolver = StandardResolver.Instance;
+        Assert.NotNull(resolver.GetFormatter<ValueTuple<int>>());
+        Assert.NotNull(resolver.GetFormatter<(int, string)>());
+        Assert.NotNull(resolver.GetFormatter<(int, string, bool)>());
+        Assert.NotNull(resolver.GetFormatter<(int, string, bool, long)>());
+        Assert.NotNull(resolver.GetFormatter<(int, string, bool, long, double)>());
+        Assert.NotNull(resolver.GetFormatter<(int, string, bool, long, double, DateTime)>());
+        Assert.NotNull(resolver.GetFormatter<(int, string, bool, long, double, DateTime, char)>());
+    }
+
+    [Fact]
+    public void StandardResolver_GetFormatter_ReturnsFormatterForNewTypes()
+    {
+        var resolver = StandardResolver.Instance;
+        Assert.NotNull(resolver.GetFormatter<DateTimeOffset>());
+        Assert.NotNull(resolver.GetFormatter<Uri?>());
+        Assert.NotNull(resolver.GetFormatter<Version?>());
     }
 }

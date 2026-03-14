@@ -7,7 +7,7 @@
         <Nullable>enable</Nullable>
         <OutputType>Library</OutputType>
         <RootNamespace>AndanteTribe.Csv</RootNamespace>
-        <Version>0.1.0</Version>
+        <Version>0.1.1</Version>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
         <!-- NuGet Packaging -->

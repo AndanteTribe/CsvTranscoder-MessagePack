@@ -100,9 +100,17 @@ public class LocalizationCsvResolverTests
     }
 
     [Fact]
-    public void LocalizationCsvResolver_GetFormatter_UnknownType_ReturnsNull()
+    public void LocalizationCsvResolver_GetFormatter_String_ReturnsLocalizedMemberJapaneseFormatter()
     {
         var formatter = LocalizationCsvResolver.Instance.GetFormatter<string>();
+        Assert.NotNull(formatter);
+        Assert.IsType<LocalizedMemberJapaneseCsvFormatter>(formatter);
+    }
+
+    [Fact]
+    public void LocalizationCsvResolver_GetFormatter_UnknownType_ReturnsNull()
+    {
+        var formatter = LocalizationCsvResolver.Instance.GetFormatter<int>();
         Assert.Null(formatter);
     }
 
@@ -112,6 +120,34 @@ public class LocalizationCsvResolverTests
         var formatter1 = LocalizationCsvResolver.Instance.GetFormatter<LocalizeFormat>();
         var formatter2 = LocalizationCsvResolver.Instance.GetFormatter<LocalizeFormat>();
         Assert.Same(formatter1, formatter2);
+    }
+
+    [Fact]
+    public void LocalizationCsvResolver_StringFormatter_TreatsAllStringsAsLocalizedPairs()
+    {
+        // When LocalizationCsvResolver is placed before StandardResolver in a composite,
+        // every string column is handled by LocalizedMemberJapaneseCsvFormatter.
+        // This means ALL string [Key] members are expected to come as ja+en column pairs,
+        // even those without [LocalizedMember]. Only use this resolver for entities whose
+        // string properties are all localized pairs.
+        var options = new CsvTranscodeOptions
+        {
+            HasHeader = false,
+            NewLine = "\n",
+            Separator = ',',
+            Resolver = AndanteTribe.Csv.CompositeResolver.Create(LocalizationCsvResolver.Instance, AndanteTribe.Csv.StandardResolver.Instance),
+        };
+
+        // CSV row with a ja+en pair: the resolver picks Japanese, skips English.
+        var bytes = Encoding.UTF8.GetBytes("日本語,English\n");
+        var reader = new CsvReader(new ReadOnlySequence<byte>(bytes), options);
+        var buffer = new ArrayBufferWriter<byte>();
+        var writer = new MessagePackWriter(buffer);
+        options.Resolver.GetFormatterWithVerify<string>().Transcode(ref writer, ref reader);
+        writer.Flush();
+
+        var result = MessagePackSerializer.Deserialize<string>(buffer.WrittenMemory);
+        Assert.Equal("日本語", result);
     }
 }
 

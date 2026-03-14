@@ -23,14 +23,6 @@ internal static class GeneratorTestHelper
     private static readonly string s_csvTranscoderAssemblyPath =
         typeof(AndanteTribe.Csv.ICsvFormatter<>).Assembly.Location;
 
-    // Anchor on LocalizedMemberAttribute to get the Localization assembly.
-    private static readonly string s_localizationAssemblyPath =
-        typeof(global::Localization.LocalizedMemberAttribute).Assembly.Location;
-
-    // Anchor on LocalizedMemberJapaneseCsvFormatter to get the Localization CSV formatter assembly.
-    private static readonly string s_localizationCsvAssemblyPath =
-        typeof(global::AndanteTribe.Csv.Formatters.LocalizedMemberJapaneseCsvFormatter).Assembly.Location;
-
     /// <summary>
     /// Runs the <see cref="CsvFormatterGenerator"/> against the supplied source code snippets
     /// and returns the resulting compilation (with generated sources included) and diagnostics.
@@ -60,8 +52,6 @@ internal static class GeneratorTestHelper
         TryAdd(s_messagePackAnnotationsAssemblyPath);
         TryAdd(s_messagePackCoreAssemblyPath);
         TryAdd(s_csvTranscoderAssemblyPath);
-        TryAdd(s_localizationAssemblyPath);
-        TryAdd(s_localizationCsvAssemblyPath);
 
         // Add all currently-loaded assemblies so the compilation has a full BCL.
         foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())

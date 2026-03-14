@@ -19,7 +19,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CsvTranscoder.MessagePack\CsvTranscoder.MessagePack.csproj" />
-    <ProjectReference Include="..\..\src\CsvTranscoder.MessagePack.Localization\CsvTranscoder.MessagePack.Localization.csproj" />
     <ProjectReference Include="..\..\src\CsvTranscoder.MessagePack.SourceGenerator\CsvTranscoder.MessagePack.SourceGenerator.csproj" />
   </ItemGroup>
 

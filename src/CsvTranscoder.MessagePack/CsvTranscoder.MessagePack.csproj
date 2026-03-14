@@ -7,7 +7,7 @@
         <Nullable>enable</Nullable>
         <OutputType>Library</OutputType>
         <RootNamespace>AndanteTribe.Csv</RootNamespace>
-        <Version>0.1.1</Version>
+        <Version>0.1.2</Version>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
         <!-- NuGet Packaging -->
@@ -20,7 +20,17 @@
         <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <!-- SourceGenerator Packaging configs-->
+        <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackBuildOutputs</TargetsForTfmSpecificContentInPackage>
     </PropertyGroup>
+
+    <!-- for nuget publish -->
+    <Target Name="PackBuildOutputs" DependsOnTargets="SatelliteDllsProjectOutputGroup;DebugSymbolsProjectOutputGroup">
+        <ItemGroup>
+            <TfmSpecificPackageFile Include="$(TargetDir)\MasterMemory.SourceGenerator.dll" PackagePath="analyzers\dotnet\cs" />
+            <TfmSpecificPackageFile Include="@(SatelliteDllsProjectOutputGroupOutput->'%(FinalOutputPath)')" PackagePath="analyzers\dotnet\cs\%(SatelliteDllsProjectOutputGroupOutput.Culture)\" />
+        </ItemGroup>
+    </Target>
 
     <ItemGroup>
         <PackageReference Include="MessagePack" Version="3.1.4" />

@@ -1,5 +1,4 @@
-﻿using AndanteTribe.Utils.MasterSample;
-using CsvTranscoder.MessagePack.Sample.Enums;
+﻿using CsvTranscoder.MessagePack.Sample.Enums;
 using GameKernel;
 using MessagePack;
 

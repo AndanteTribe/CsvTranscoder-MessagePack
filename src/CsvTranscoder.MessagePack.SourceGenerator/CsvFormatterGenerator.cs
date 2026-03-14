@@ -23,6 +23,14 @@ public sealed class CsvFormatterGenerator : IIncrementalGenerator
     private const string KeyAttributeFqn = "MessagePack.KeyAttribute";
     private const string IgnoreMemberAttributeFqn = "MessagePack.IgnoreMemberAttribute";
     private const string GeneratedCsvFormatterResolverAttributeFqn = "AndanteTribe.Csv.GeneratedCsvFormatterResolverAttribute";
+    private const string LocalizedMemberAttributeFqn = "Localization.LocalizedMemberAttribute";
+
+    /// <summary>
+    /// Fully-qualified name of the Japanese localized-member formatter used in generated code.
+    /// The formatter reads the first (Japanese) language column and skips the second (English) column.
+    /// </summary>
+    private const string LocalizedMemberFormatterFqn =
+        "global::AndanteTribe.Csv.Formatters.LocalizedMemberJapaneseCsvFormatter";
 
     // -----------------------------------------------------------------------
     //  Injected attribute source
@@ -76,6 +84,12 @@ namespace AndanteTribe.Csv
     {
         public int Key { get; set; }
         public string MemberTypeFqn { get; set; } = string.Empty;
+        /// <summary>
+        /// <see langword="true"/> when the member carries <c>[Localization.LocalizedMemberAttribute]</c>.
+        /// The generated formatter will call <see cref="LocalizedMemberFormatterFqn"/> directly instead
+        /// of looking up a formatter via the resolver, so that the extra language column is skipped.
+        /// </summary>
+        public bool IsLocalizedMember { get; set; }
     }
 
     private sealed class ResolverModel
@@ -242,10 +256,22 @@ namespace AndanteTribe.Csv
             // and a negative MaxKey would make the array-header loop never run.
             if (keyValue < 0) continue;
 
+            // Detect [LocalizedMember] — member spans multiple consecutive CSV columns.
+            var isLocalizedMember = false;
+            foreach (var attr in member.GetAttributes())
+            {
+                if (attr.AttributeClass?.ToDisplayString() == LocalizedMemberAttributeFqn)
+                {
+                    isLocalizedMember = true;
+                    break;
+                }
+            }
+
             members.Add(new KeyMemberModel
             {
                 Key = keyValue.Value,
-                MemberTypeFqn = memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                MemberTypeFqn = memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                IsLocalizedMember = isLocalizedMember,
             });
         }
 
@@ -473,8 +499,18 @@ namespace AndanteTribe.Csv
         {
             if (membersByKey.TryGetValue(key, out var member))
             {
-                sb.AppendLine(
-                    $"{fi}        global::AndanteTribe.Csv.FormatterResolverExtensions.GetFormatterWithVerify<{member.MemberTypeFqn}>(reader.Options.Resolver).Transcode(ref writer, ref reader);");
+                if (member.IsLocalizedMember)
+                {
+                    // [LocalizedMember]: use the localized formatter directly so that the extra
+                    // language column is consumed (read + skip) within a single Transcode call.
+                    sb.AppendLine(
+                        $"{fi}        {LocalizedMemberFormatterFqn}.Instance.Transcode(ref writer, ref reader);");
+                }
+                else
+                {
+                    sb.AppendLine(
+                        $"{fi}        global::AndanteTribe.Csv.FormatterResolverExtensions.GetFormatterWithVerify<{member.MemberTypeFqn}>(reader.Options.Resolver).Transcode(ref writer, ref reader);");
+                }
             }
             else
             {

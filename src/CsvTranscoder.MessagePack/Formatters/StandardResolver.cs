@@ -59,7 +59,7 @@ public sealed class StandardResolver : ICsvFormatterResolver
 
         if (typeof(T).IsEnum)
         {
-            Cache<T>.Value = (ICsvFormatter<T>)Activator.CreateInstance(typeof(EnumFormatter<>).MakeGenericType(typeof(T)))!;
+            Cache<T>.Value = (ICsvFormatter<T>)Activator.CreateInstance(typeof(EnumMemberCsvFormatter<>).MakeGenericType(typeof(T)))!;
             return Cache<T>.Value;
         }
 

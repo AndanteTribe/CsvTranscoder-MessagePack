@@ -9,7 +9,7 @@
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
         <OutputType>Library</OutputType>
-        <Version>0.1.0</Version>
+        <Version>0.1.1</Version>
 
         <!-- NuGet Packaging -->
         <PackageId>AndanteTribe.CsvTranscoder.MessagePack.SourceGenerator</PackageId>

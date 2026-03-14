@@ -208,19 +208,63 @@ public class CsvFormatterGeneratorTests
     }
 
     // -----------------------------------------------------------------------
-    //  Attribute lives in the library, not in the generator
+    //  Attribute injection and #if guard
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void GeneratedCsvFormatterResolverAttribute_IsAvailableInLibrary()
+    public void InjectsGeneratedCsvFormatterResolverAttribute_WithDisableGuard()
     {
-        // The attribute must be a real type in the CsvTranscoder.MessagePack assembly,
-        // not injected by the generator's post-initialization output.
-        var attrType = typeof(AndanteTribe.Csv.GeneratedCsvFormatterResolverAttribute);
-        Assert.Equal("AndanteTribe.Csv", attrType.Namespace);
-        Assert.True(attrType.IsPublic);
-        // Verify it's in the main library assembly (not a generated/dynamic one)
-        Assert.Equal(typeof(AndanteTribe.Csv.ICsvFormatter<>).Assembly, attrType.Assembly);
+        var (compilation, _) = GeneratorTestHelper.RunGenerator();
+
+        var attrSrc = GetGeneratedSource(compilation, "GeneratedCsvFormatterResolverAttribute");
+        Assert.NotNull(attrSrc);
+        Assert.Contains("GeneratedCsvFormatterResolverAttribute", attrSrc);
+        Assert.Contains("AttributeUsage", attrSrc);
+        Assert.Contains("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK", attrSrc);
+        Assert.Contains("#endif", attrSrc);
+    }
+
+    [Fact]
+    public void GeneratedFormatter_IsWrappedWithDisableGuard()
+    {
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            public class Guarded { [Key(0)] public int X { get; set; } }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var src = GetGeneratedSource(compilation, "Formatter_MyNs_Guarded");
+        Assert.NotNull(src);
+        Assert.Contains("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK", src);
+        Assert.Contains("#endif", src);
+    }
+
+    [Fact]
+    public void GeneratedResolver_IsWrappedWithDisableGuard()
+    {
+        const string source = """
+            using MessagePack;
+            using AndanteTribe.Csv;
+            namespace MyNs;
+            [MessagePackObject]
+            public class Foo { [Key(0)] public int Id { get; set; } }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK", resolverSrc);
+        Assert.Contains("#endif", resolverSrc);
     }
 
     // -----------------------------------------------------------------------

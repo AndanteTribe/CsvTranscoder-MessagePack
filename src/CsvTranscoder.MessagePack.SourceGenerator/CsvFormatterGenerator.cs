@@ -61,9 +61,13 @@ namespace AndanteTribe.Csv
     private sealed class TypeModel
     {
         public string FullyQualifiedName { get; set; } = string.Empty;
-        public string FormatterClassName { get; set; } = string.Empty;
-        public string FileHintName { get; set; } = string.Empty;
-        public string Accessibility { get; set; } = "public";
+        public string TypeSimpleName { get; set; } = string.Empty;
+        /// <summary>Namespace parts + containing type names used to create nested partial class hierarchy.</summary>
+        public List<string> NestingParts { get; set; } = new List<string>();
+        /// <summary>Simple formatter class name, e.g. <c>MyTypeCsvFormatter</c>.</summary>
+        public string FormatterSimpleName { get; set; } = string.Empty;
+        /// <summary>Path to the formatter relative to the resolver class body, e.g. <c>Foo.Bar.MyTypeCsvFormatter</c>.</summary>
+        public string FormatterRelativePath { get; set; } = string.Empty;
         public List<KeyMemberModel> Members { get; set; } = new List<KeyMemberModel>();
         public int MaxKey { get; set; }
     }
@@ -80,7 +84,6 @@ namespace AndanteTribe.Csv
         public string ClassName { get; set; } = string.Empty;
         public string FileHintName { get; set; } = string.Empty;
         public string Accessibility { get; set; } = "public";
-        public string LookupClassName { get; set; } = string.Empty;
     }
 
     // -----------------------------------------------------------------------
@@ -112,19 +115,9 @@ namespace AndanteTribe.Csv
                 transform: static (ctx, ct) => GetResolverModel(ctx, ct))
             .Where(static m => m is not null);
 
-        // Output: one formatter file per [MessagePackObject] type.
-        context.RegisterSourceOutput(messagePackTypes, static (ctx, types) =>
-        {
-            foreach (var type in types)
-            {
-                if (type is null) continue;
-                ctx.AddSource(
-                    type.FileHintName + ".g.cs",
-                    SourceText.From(GenerateFormatter(type), Encoding.UTF8));
-            }
-        });
-
         // Output: one resolver file per [GeneratedCsvFormatterResolver] class.
+        // The resolver file contains all formatter classes nested inside the resolver,
+        // following the same pattern as MessagePack-CSharp's source generator.
         context.RegisterSourceOutput(
             resolverClasses.Combine(messagePackTypes),
             static (ctx, pair) =>
@@ -149,14 +142,10 @@ namespace AndanteTribe.Csv
         if (typeSymbol.IsGenericType) return null;
 
         // Skip types that are not publicly or internally accessible (e.g., private nested types).
-        // A public formatter cannot implement ICsvFormatter<T> for a less-accessible T.
+        // The formatter is always 'internal sealed' but still cannot reference a less-accessible type.
         if (typeSymbol.DeclaredAccessibility != Accessibility.Public &&
             typeSymbol.DeclaredAccessibility != Accessibility.Internal)
             return null;
-
-        var accessibilityKeyword = typeSymbol.DeclaredAccessibility == Accessibility.Internal
-            ? "internal"
-            : "public";
 
         var members = new List<KeyMemberModel>();
 
@@ -224,21 +213,37 @@ namespace AndanteTribe.Csv
 
         var fqn = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        // Build a unique, file-system-safe class name based on the full type name.
-        var flatName = typeSymbol
-            .ToDisplayString()
-            .Replace(".", "_")
-            .Replace("<", "_")
-            .Replace(">", string.Empty)
-            .Replace(",", "_")
-            .Replace(" ", string.Empty);
+        // Build the nesting parts: namespace segments + containing type names.
+        // These are used to create the internal partial class hierarchy inside the resolver.
+        var nsParts = typeSymbol.ContainingNamespace is { IsGlobalNamespace: false } nsSymbol
+            ? nsSymbol.ToDisplayString().Split('.')
+            : System.Array.Empty<string>();
+
+        var containingTypeParts = new List<string>();
+        var containingType = typeSymbol.ContainingType;
+        while (containingType is not null)
+        {
+            containingTypeParts.Insert(0, containingType.Name);
+            containingType = containingType.ContainingType;
+        }
+
+        var nestingParts = new List<string>(nsParts.Length + containingTypeParts.Count);
+        nestingParts.AddRange(nsParts);
+        nestingParts.AddRange(containingTypeParts);
+
+        var typeSimpleName = typeSymbol.Name;
+        var formatterSimpleName = typeSimpleName + "CsvFormatter";
+        var formatterRelativePath = nestingParts.Count > 0
+            ? string.Join(".", nestingParts) + "." + formatterSimpleName
+            : formatterSimpleName;
 
         return new TypeModel
         {
             FullyQualifiedName = fqn,
-            FormatterClassName = flatName + "CsvFormatter",
-            FileHintName = "Formatter_" + flatName,
-            Accessibility = accessibilityKeyword,
+            TypeSimpleName = typeSimpleName,
+            NestingParts = nestingParts,
+            FormatterSimpleName = formatterSimpleName,
+            FormatterRelativePath = formatterRelativePath,
             Members = members,
             MaxKey = maxKey
         };
@@ -265,18 +270,12 @@ namespace AndanteTribe.Csv
             ? "internal"
             : "public";
 
-        // Prefix the namespace to make the lookup class name unique within AndanteTribe.Csv.Generated,
-        // avoiding collisions when two resolvers in different namespaces share the same class name.
-        var lookupClassName = (ns.Length > 0 ? ns.Replace(".", "_") + "_" : string.Empty)
-            + className + "FormatterLookup";
-
         return new ResolverModel
         {
             Namespace = ns,
             ClassName = className,
             FileHintName = fileHintName,
-            Accessibility = accessibilityKeyword,
-            LookupClassName = lookupClassName
+            Accessibility = accessibilityKeyword
         };
     }
 
@@ -284,28 +283,109 @@ namespace AndanteTribe.Csv
     //  Code generation
     // -----------------------------------------------------------------------
 
-    private static string GenerateFormatter(TypeModel model)
+    private static string GenerateResolver(ResolverModel model, ImmutableArray<TypeModel?> types)
     {
+        var validTypes = types.Where(static t => t is not null).ToList();
+
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
         sb.AppendLine("#nullable enable");
         sb.AppendLine("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK");
         sb.AppendLine();
-        sb.AppendLine("namespace AndanteTribe.Csv.Generated");
-        sb.AppendLine("{");
-        sb.AppendLine($"    /// <summary>Auto-generated <c>ICsvFormatter</c> for <see cref=\"{model.FullyQualifiedName}\"/>.</summary>");
-        sb.AppendLine($"    {model.Accessibility} sealed class {model.FormatterClassName} : global::AndanteTribe.Csv.ICsvFormatter<{model.FullyQualifiedName}>");
-        sb.AppendLine("    {");
-        sb.AppendLine($"        public static readonly {model.FormatterClassName} Instance = new {model.FormatterClassName}();");
-        sb.AppendLine();
-        sb.AppendLine($"        private {model.FormatterClassName}() {{ }}");
-        sb.AppendLine();
-        sb.AppendLine("        public void Transcode(ref global::MessagePack.MessagePackWriter writer, ref global::AndanteTribe.Csv.CsvReader reader)");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            writer.WriteArrayHeader({model.MaxKey + 1});");
 
-        // Build index for O(1) lookup while iterating over 0..maxKey.
-        // Use ContainsKey so duplicate key values keep the first member (first declaration wins).
+        var outerIndent = string.Empty;
+        if (model.Namespace.Length > 0)
+        {
+            sb.AppendLine($"namespace {model.Namespace}");
+            sb.AppendLine("{");
+            outerIndent = "    ";
+        }
+
+        var bodyIndent = outerIndent + "    ";
+
+        sb.AppendLine($"{outerIndent}{model.Accessibility} partial class {model.ClassName} : global::AndanteTribe.Csv.ICsvFormatterResolver");
+        sb.AppendLine($"{outerIndent}{{");
+        sb.AppendLine($"{bodyIndent}public static readonly {model.ClassName} Instance = new {model.ClassName}();");
+        sb.AppendLine();
+        sb.AppendLine($"{bodyIndent}private {model.ClassName}() {{ }}");
+        sb.AppendLine();
+        sb.AppendLine($"{bodyIndent}private static class Cache<T>");
+        sb.AppendLine($"{bodyIndent}{{");
+        sb.AppendLine($"{bodyIndent}    public static readonly global::AndanteTribe.Csv.ICsvFormatter<T>? Value =");
+        sb.AppendLine($"{bodyIndent}        FormatterLookup.GetFormatter(typeof(T)) as global::AndanteTribe.Csv.ICsvFormatter<T>;");
+        sb.AppendLine($"{bodyIndent}}}");
+        sb.AppendLine();
+        sb.AppendLine($"{bodyIndent}public global::AndanteTribe.Csv.ICsvFormatter<T>? GetFormatter<T>() => Cache<T>.Value;");
+        sb.AppendLine();
+
+        // Private FormatterLookup class — no global namespace needed; each resolver has its own.
+        sb.AppendLine($"{bodyIndent}private static class FormatterLookup");
+        sb.AppendLine($"{bodyIndent}{{");
+        sb.AppendLine($"{bodyIndent}    public static object? GetFormatter(global::System.Type t)");
+        sb.AppendLine($"{bodyIndent}    {{");
+
+        foreach (var type in validTypes)
+        {
+            sb.AppendLine($"{bodyIndent}        if (t == typeof({type!.FullyQualifiedName}))");
+            sb.AppendLine($"{bodyIndent}            return {type.FormatterRelativePath}.Instance;");
+        }
+
+        sb.AppendLine($"{bodyIndent}        return null;");
+        sb.AppendLine($"{bodyIndent}    }}");
+        sb.AppendLine($"{bodyIndent}}}");
+
+        // Formatter classes nested inside the resolver, mirroring each type's namespace hierarchy
+        // as internal partial classes — the same pattern used by MessagePack-CSharp's generator.
+        foreach (var type in validTypes)
+        {
+            sb.AppendLine();
+            AppendFormatterBlock(sb, type!, bodyIndent);
+        }
+
+        sb.AppendLine($"{outerIndent}}}");
+
+        if (model.Namespace.Length > 0)
+            sb.AppendLine("}");
+
+        sb.AppendLine();
+        sb.Append("#endif");
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Appends the formatter class for <paramref name="model"/> inside the resolver class body,
+    /// wrapping it in <c>internal partial class</c> declarations that mirror the type's namespace
+    /// and containing-type hierarchy.
+    /// </summary>
+    private static void AppendFormatterBlock(StringBuilder sb, TypeModel model, string baseIndent)
+    {
+        // Pre-compute indents for each nesting level.
+        var indents = new string[model.NestingParts.Count + 1];
+        for (var i = 0; i <= model.NestingParts.Count; i++)
+            indents[i] = baseIndent + new string(' ', i * 4);
+
+        // Open nested partial class wrappers (one per namespace segment / containing type).
+        for (var i = 0; i < model.NestingParts.Count; i++)
+        {
+            sb.AppendLine($"{indents[i]}internal partial class {model.NestingParts[i]}");
+            sb.AppendLine($"{indents[i]}{{");
+        }
+
+        var fi = indents[model.NestingParts.Count]; // formatter class indent
+
+        sb.AppendLine($"{fi}/// <summary>Auto-generated <c>ICsvFormatter</c> for <see cref=\"{model.FullyQualifiedName}\"/>.</summary>");
+        sb.AppendLine($"{fi}internal sealed class {model.FormatterSimpleName} : global::AndanteTribe.Csv.ICsvFormatter<{model.FullyQualifiedName}>");
+        sb.AppendLine($"{fi}{{");
+        sb.AppendLine($"{fi}    public static readonly {model.FormatterSimpleName} Instance = new {model.FormatterSimpleName}();");
+        sb.AppendLine();
+        sb.AppendLine($"{fi}    private {model.FormatterSimpleName}() {{ }}");
+        sb.AppendLine();
+        sb.AppendLine($"{fi}    public void Transcode(ref global::MessagePack.MessagePackWriter writer, ref global::AndanteTribe.Csv.CsvReader reader)");
+        sb.AppendLine($"{fi}    {{");
+        sb.AppendLine($"{fi}        writer.WriteArrayHeader({model.MaxKey + 1});");
+
+        // Build O(1) key lookup; ContainsKey ensures first declaration wins for duplicate keys.
         var membersByKey = new Dictionary<int, KeyMemberModel>();
         foreach (var m in model.Members)
         {
@@ -318,82 +398,20 @@ namespace AndanteTribe.Csv
             if (membersByKey.TryGetValue(key, out var member))
             {
                 sb.AppendLine(
-                    $"            global::AndanteTribe.Csv.FormatterResolverExtensions.GetFormatterWithVerify<{member.MemberTypeFqn}>(reader.Options.Resolver).Transcode(ref writer, ref reader);");
+                    $"{fi}        global::AndanteTribe.Csv.FormatterResolverExtensions.GetFormatterWithVerify<{member.MemberTypeFqn}>(reader.Options.Resolver).Transcode(ref writer, ref reader);");
             }
             else
             {
                 // Sparse key: write nil without consuming a CSV field.
-                sb.AppendLine("            writer.WriteNil();");
+                sb.AppendLine($"{fi}        writer.WriteNil();");
             }
         }
 
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
-        sb.AppendLine();
-        sb.Append("#endif");
+        sb.AppendLine($"{fi}    }}");
+        sb.AppendLine($"{fi}}}");
 
-        return sb.ToString();
-    }
-
-    private static string GenerateResolver(ResolverModel model, ImmutableArray<TypeModel?> types)
-    {
-        var validTypes = types.Where(static t => t is not null).ToList();
-
-        var sb = new StringBuilder();
-        sb.AppendLine("// <auto-generated/>");
-        sb.AppendLine("#nullable enable");
-        sb.AppendLine("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK");
-        sb.AppendLine();
-
-        var indent = string.Empty;
-        if (model.Namespace.Length > 0)
-        {
-            sb.AppendLine($"namespace {model.Namespace}");
-            sb.AppendLine("{");
-            indent = "    ";
-        }
-
-        sb.AppendLine($"{indent}{model.Accessibility} partial class {model.ClassName} : global::AndanteTribe.Csv.ICsvFormatterResolver");
-        sb.AppendLine($"{indent}{{");
-        sb.AppendLine($"{indent}    public static readonly {model.ClassName} Instance = new {model.ClassName}();");
-        sb.AppendLine();
-        sb.AppendLine($"{indent}    private {model.ClassName}() {{ }}");
-        sb.AppendLine();
-        sb.AppendLine($"{indent}    private static class Cache<T>");
-        sb.AppendLine($"{indent}    {{");
-        sb.AppendLine($"{indent}        public static readonly global::AndanteTribe.Csv.ICsvFormatter<T>? Value =");
-        sb.AppendLine($"{indent}            global::AndanteTribe.Csv.Generated.{model.LookupClassName}.GetFormatter(typeof(T)) as global::AndanteTribe.Csv.ICsvFormatter<T>;");
-        sb.AppendLine($"{indent}    }}");
-        sb.AppendLine();
-        sb.AppendLine($"{indent}    public global::AndanteTribe.Csv.ICsvFormatter<T>? GetFormatter<T>() => Cache<T>.Value;");
-        sb.AppendLine($"{indent}}}");
-
-        if (model.Namespace.Length > 0)
-            sb.AppendLine("}");
-
-        // Companion lookup class in the Generated namespace.
-        sb.AppendLine();
-        sb.AppendLine("namespace AndanteTribe.Csv.Generated");
-        sb.AppendLine("{");
-        sb.AppendLine($"    internal static class {model.LookupClassName}");
-        sb.AppendLine("    {");
-        sb.AppendLine("        public static object? GetFormatter(global::System.Type t)");
-        sb.AppendLine("        {");
-
-        foreach (var type in validTypes)
-        {
-            sb.AppendLine($"            if (t == typeof({type!.FullyQualifiedName}))");
-            sb.AppendLine($"                return global::AndanteTribe.Csv.Generated.{type.FormatterClassName}.Instance;");
-        }
-
-        sb.AppendLine("            return null;");
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
-        sb.AppendLine();
-        sb.Append("#endif");
-
-        return sb.ToString();
+        // Close nested partial class wrappers (innermost first).
+        for (var i = model.NestingParts.Count - 1; i >= 0; i--)
+            sb.AppendLine($"{indents[i]}}}");
     }
 }

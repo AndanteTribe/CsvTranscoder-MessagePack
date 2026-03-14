@@ -6,11 +6,14 @@ namespace CsvTranscoder.MessagePack.SourceGenerator.Tests;
 /// Unit tests for <see cref="AndanteTribe.Csv.SourceGenerator.CsvFormatterGenerator"/>.
 /// Each test creates an in-memory compilation, runs the generator, and inspects either
 /// the generated source code or the output compilation for correctness.
+/// Formatters are generated as <c>internal sealed class {TypeName}CsvFormatter</c> nested
+/// inside the <c>[GeneratedCsvFormatterResolver]</c> partial class, following the same pattern
+/// as MessagePack-CSharp's source generator.
 /// </summary>
 public class CsvFormatterGeneratorTests
 {
     // -----------------------------------------------------------------------
-    //  Formatter generation
+    //  Formatter generation (formatter code lives inside the resolver file)
     // -----------------------------------------------------------------------
 
     [Fact]
@@ -18,6 +21,7 @@ public class CsvFormatterGeneratorTests
     {
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class Foo
@@ -25,18 +29,22 @@ public class CsvFormatterGeneratorTests
                 [Key(0)] public int Id { get; set; }
                 [Key(1)] public string Name { get; set; } = "";
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var formatterSource = GetGeneratedSource(compilation, "Formatter_MyNs_Foo");
-        Assert.NotNull(formatterSource);
-        Assert.Contains("ICsvFormatter<global::MyNs.Foo>", formatterSource);
-        Assert.Contains("writer.WriteArrayHeader(2)", formatterSource);
-        Assert.Contains("GetFormatterWithVerify<int>", formatterSource);
-        Assert.Contains("GetFormatterWithVerify<string>", formatterSource);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        // Formatter is nested inside the resolver as 'internal sealed class FooCsvFormatter'
+        Assert.Contains("internal sealed class FooCsvFormatter", resolverSrc);
+        Assert.Contains("ICsvFormatter<global::MyNs.Foo>", resolverSrc);
+        Assert.Contains("writer.WriteArrayHeader(2)", resolverSrc);
+        Assert.Contains("GetFormatterWithVerify<int>", resolverSrc);
+        Assert.Contains("GetFormatterWithVerify<string>", resolverSrc);
     }
 
     [Fact]
@@ -44,6 +52,7 @@ public class CsvFormatterGeneratorTests
     {
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class Sparse
@@ -52,18 +61,21 @@ public class CsvFormatterGeneratorTests
                 // Key(1) intentionally missing
                 [Key(2)] public int B { get; set; }
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_Sparse");
-        Assert.NotNull(src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("SparseCsvFormatter", resolverSrc);
         // Array header must be maxKey+1 = 3
-        Assert.Contains("writer.WriteArrayHeader(3)", src);
+        Assert.Contains("writer.WriteArrayHeader(3)", resolverSrc);
         // Sparse slot (key 1) writes nil
-        Assert.Contains("writer.WriteNil();", src);
+        Assert.Contains("writer.WriteNil();", resolverSrc);
     }
 
     [Fact]
@@ -71,6 +83,7 @@ public class CsvFormatterGeneratorTests
     {
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class Bar
@@ -78,15 +91,18 @@ public class CsvFormatterGeneratorTests
                 [Key(0)] public int Id { get; set; }
                 [IgnoreMember] public string Ignored { get; set; } = "";
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_Bar");
-        Assert.NotNull(src);
-        Assert.Contains("writer.WriteArrayHeader(1)", src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("BarCsvFormatter", resolverSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
     }
 
     [Fact]
@@ -94,20 +110,24 @@ public class CsvFormatterGeneratorTests
     {
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class NoKeys
             {
                 [IgnoreMember] public int X { get; set; }
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         // No formatter should be generated for a type with no [Key] members.
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_NoKeys");
-        Assert.Null(src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.DoesNotContain("NoKeysCsvFormatter", resolverSrc);
     }
 
     [Fact]
@@ -184,6 +204,9 @@ public class CsvFormatterGeneratorTests
         Assert.NotNull(resolverSrc);
         Assert.Contains("global::MyNs.TypeA", resolverSrc);
         Assert.Contains("global::MyNs.TypeB", resolverSrc);
+        // Both formatter classes nested inside the resolver
+        Assert.Contains("TypeACsvFormatter", resolverSrc);
+        Assert.Contains("TypeBCsvFormatter", resolverSrc);
     }
 
     [Fact]
@@ -205,6 +228,8 @@ public class CsvFormatterGeneratorTests
         var resolverSrc = GetGeneratedSource(compilation, "Resolver_GlobalResolver");
         Assert.NotNull(resolverSrc);
         Assert.Contains("partial class GlobalResolver", resolverSrc);
+        // Type in global namespace → formatter nested directly in resolver, no partial-class wrapping
+        Assert.Contains("TopLevelTypeCsvFormatter", resolverSrc);
     }
 
     // -----------------------------------------------------------------------
@@ -222,26 +247,6 @@ public class CsvFormatterGeneratorTests
         Assert.Contains("AttributeUsage", attrSrc);
         Assert.Contains("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK", attrSrc);
         Assert.Contains("#endif", attrSrc);
-    }
-
-    [Fact]
-    public void GeneratedFormatter_IsWrappedWithDisableGuard()
-    {
-        const string source = """
-            using MessagePack;
-            namespace MyNs;
-            [MessagePackObject]
-            public class Guarded { [Key(0)] public int X { get; set; } }
-            """;
-
-        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
-
-        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
-
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_Guarded");
-        Assert.NotNull(src);
-        Assert.Contains("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK", src);
-        Assert.Contains("#endif", src);
     }
 
     [Fact]
@@ -265,6 +270,8 @@ public class CsvFormatterGeneratorTests
         Assert.NotNull(resolverSrc);
         Assert.Contains("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK", resolverSrc);
         Assert.Contains("#endif", resolverSrc);
+        // Formatter code is in the same guarded resolver file
+        Assert.Contains("FooCsvFormatter", resolverSrc);
     }
 
     // -----------------------------------------------------------------------
@@ -277,6 +284,7 @@ public class CsvFormatterGeneratorTests
         // Static members should be ignored even when decorated with [Key].
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class WithStatic
@@ -284,16 +292,18 @@ public class CsvFormatterGeneratorTests
                 [Key(0)] public int Id { get; set; }
                 [Key(1)] public static int StaticProp { get; set; }
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithStatic");
-        Assert.NotNull(src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
         // Only the non-static Id (key 0) should appear; array size should be 1.
-        Assert.Contains("writer.WriteArrayHeader(1)", src);
+        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
     }
 
     [Fact]
@@ -302,6 +312,7 @@ public class CsvFormatterGeneratorTests
         // Private/internal members must be excluded.
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class WithPrivate
@@ -309,15 +320,17 @@ public class CsvFormatterGeneratorTests
                 [Key(0)] public int Id { get; set; }
                 [Key(1)] private string Secret { get; set; } = "";
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithPrivate");
-        Assert.NotNull(src);
-        Assert.Contains("writer.WriteArrayHeader(1)", src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
     }
 
     [Fact]
@@ -327,6 +340,7 @@ public class CsvFormatterGeneratorTests
         // strings the type should produce no formatter at all.
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class StringKeyed
@@ -334,13 +348,17 @@ public class CsvFormatterGeneratorTests
                 [Key("id")] public int Id { get; set; }
                 [Key("name")] public string Name { get; set; } = "";
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         // All members have string keys → no valid int-key members → no formatter generated.
-        Assert.Null(GetGeneratedSource(compilation, "Formatter_MyNs_StringKeyed"));
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.DoesNotContain("StringKeyedCsvFormatter", resolverSrc);
     }
 
     [Fact]
@@ -349,6 +367,7 @@ public class CsvFormatterGeneratorTests
         // Only int-keyed members contribute to the formatter; string-keyed members are skipped.
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class MixedKeys
@@ -356,17 +375,20 @@ public class CsvFormatterGeneratorTests
                 [Key(0)] public int Id { get; set; }
                 [Key("name")] public string Name { get; set; } = "";
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_MixedKeys");
-        Assert.NotNull(src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("MixedKeysCsvFormatter", resolverSrc);
         // Only the int-keyed Id member should be in the formatter.
-        Assert.Contains("writer.WriteArrayHeader(1)", src);
-        Assert.DoesNotContain("Name", src);
+        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
+        Assert.DoesNotContain("Name", resolverSrc);
     }
 
     [Fact]
@@ -375,22 +397,26 @@ public class CsvFormatterGeneratorTests
         // Public fields (not just properties) should be picked up by the generator.
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class WithField
             {
                 [Key(0)] public int Value;
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithField");
-        Assert.NotNull(src);
-        Assert.Contains("writer.WriteArrayHeader(1)", src);
-        Assert.Contains("GetFormatterWithVerify<int>", src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("WithFieldCsvFormatter", resolverSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
+        Assert.Contains("GetFormatterWithVerify<int>", resolverSrc);
     }
 
     [Fact]
@@ -424,21 +450,83 @@ public class CsvFormatterGeneratorTests
     {
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public readonly record struct MyStruct(
                 [property: Key(0)] int X,
                 [property: Key(1)] int Y);
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_MyStruct");
-        Assert.NotNull(src);
-        Assert.Contains("ICsvFormatter<global::MyNs.MyStruct>", src);
-        Assert.Contains("writer.WriteArrayHeader(2)", src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("MyStructCsvFormatter", resolverSrc);
+        Assert.Contains("ICsvFormatter<global::MyNs.MyStruct>", resolverSrc);
+        Assert.Contains("writer.WriteArrayHeader(2)", resolverSrc);
+    }
+
+    // -----------------------------------------------------------------------
+    //  Naming convention: MessagePack-style nested partial class hierarchy
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void GeneratesFormatter_NestedInsideResolverWithNamespaceHierarchy()
+    {
+        // Formatters must be nested inside the resolver using internal partial classes
+        // that mirror the type's namespace — the same pattern as MessagePack-CSharp's generator.
+        const string source = """
+            using MessagePack;
+            using AndanteTribe.Csv;
+            namespace MyNs;
+            [MessagePackObject]
+            public class Foo { [Key(0)] public int Id { get; set; } }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        // The namespace 'MyNs' should appear as an internal partial class wrapper inside resolver
+        Assert.Contains("internal partial class MyNs", resolverSrc);
+        // The formatter class is internal sealed
+        Assert.Contains("internal sealed class FooCsvFormatter", resolverSrc);
+        // Uses simple type name (not flat underscore-separated name)
+        Assert.DoesNotContain("MyNs_FooCsvFormatter", resolverSrc);
+    }
+
+    [Fact]
+    public void GeneratesFormatter_FormatterLookup_IsPrivateInsideResolver()
+    {
+        // The FormatterLookup class must be private inside the resolver — no global
+        // AndanteTribe.Csv.Generated namespace collision possible.
+        const string source = """
+            using MessagePack;
+            using AndanteTribe.Csv;
+            namespace MyNs;
+            [MessagePackObject]
+            public class Foo { [Key(0)] public int Id { get; set; } }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("private static class FormatterLookup", resolverSrc);
+        Assert.DoesNotContain("namespace AndanteTribe.Csv.Generated", resolverSrc);
     }
 
     // -----------------------------------------------------------------------
@@ -448,11 +536,10 @@ public class CsvFormatterGeneratorTests
     [Fact]
     public void SkipsNonPublicMessagePackObjectType()
     {
-        // Private nested types should produce no formatter: the generated formatter
-        // would need to be less accessible than 'public', which breaks the enclosing
-        // 'AndanteTribe.Csv.Generated' namespace convention.
+        // Private nested types should produce no formatter.
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             public class Outer
             {
@@ -462,35 +549,43 @@ public class CsvFormatterGeneratorTests
                     [Key(0)] public int Id { get; set; }
                 }
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
-        Assert.Null(GetGeneratedSource(compilation, "Formatter_MyNs_Outer_PrivateInner"));
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.DoesNotContain("PrivateInnerCsvFormatter", resolverSrc);
     }
 
     [Fact]
-    public void GeneratesFormatter_ForInternalType_WithInternalAccessibility()
+    public void GeneratesFormatter_ForInternalType()
     {
-        // Internal [MessagePackObject] types should produce an 'internal' formatter class.
+        // Internal [MessagePackObject] types should produce a formatter — always internal sealed.
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             internal class InternalFoo
             {
                 [Key(0)] public int Id { get; set; }
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_InternalFoo");
-        Assert.NotNull(src);
-        Assert.Contains("internal sealed class", src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("InternalFooCsvFormatter", resolverSrc);
+        Assert.Contains("internal sealed class InternalFooCsvFormatter", resolverSrc);
     }
 
     [Fact]
@@ -500,6 +595,7 @@ public class CsvFormatterGeneratorTests
         // MessagePack's own analyzer already warns about negative keys.
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class WithNegativeKey
@@ -507,16 +603,18 @@ public class CsvFormatterGeneratorTests
                 [Key(0)] public int Valid { get; set; }
                 [Key(-1)] public int Invalid { get; set; }
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithNegativeKey");
-        Assert.NotNull(src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
         // Only key 0 (Valid) should appear; array size should be 1.
-        Assert.Contains("writer.WriteArrayHeader(1)", src);
+        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
     }
 
     [Fact]
@@ -526,6 +624,7 @@ public class CsvFormatterGeneratorTests
         // The first member in declaration order wins; the duplicate is silently dropped.
         const string source = """
             using MessagePack;
+            using AndanteTribe.Csv;
             namespace MyNs;
             [MessagePackObject]
             public class WithDuplicateKey
@@ -533,6 +632,8 @@ public class CsvFormatterGeneratorTests
                 [Key(0)] public int First { get; set; }
                 [Key(0)] public int Second { get; set; }
             }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
             """;
 
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
@@ -541,9 +642,9 @@ public class CsvFormatterGeneratorTests
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error
             && d.GetMessage().Contains("Exception"));
 
-        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithDuplicateKey");
-        Assert.NotNull(src);
-        Assert.Contains("writer.WriteArrayHeader(1)", src);
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
     }
 
     [Fact]
@@ -593,10 +694,11 @@ public class CsvFormatterGeneratorTests
     }
 
     [Fact]
-    public void GeneratedResolver_UniqueLookupClassName_WhenSameResolverNameInDifferentNamespaces()
+    public void GeneratedResolver_EachHasPrivateFormatterLookup_NoCollision()
     {
-        // Two resolvers with the same class name in different namespaces must produce
-        // distinct lookup class names in AndanteTribe.Csv.Generated.
+        // Two resolvers with the same class name in different namespaces must each produce
+        // a self-contained file. Since FormatterLookup is now private inside each resolver,
+        // there is no naming collision in a shared namespace.
         const string sourceA = """
             using MessagePack;
             using AndanteTribe.Csv;
@@ -625,9 +727,12 @@ public class CsvFormatterGeneratorTests
         var resolverB = GetGeneratedSource(compilation, "Resolver_NsB_MyResolver");
         Assert.NotNull(resolverA);
         Assert.NotNull(resolverB);
-        // Each resolver must reference its own uniquely-named lookup class.
-        Assert.Contains("NsA_MyResolverFormatterLookup", resolverA);
-        Assert.Contains("NsB_MyResolverFormatterLookup", resolverB);
+        // Each resolver's FormatterLookup is private and independent — no collision.
+        Assert.Contains("private static class FormatterLookup", resolverA);
+        Assert.Contains("private static class FormatterLookup", resolverB);
+        // Each resolver references only its own type.
+        Assert.Contains("global::NsA.Foo", resolverA);
+        Assert.Contains("global::NsB.Bar", resolverB);
     }
 
     // -----------------------------------------------------------------------

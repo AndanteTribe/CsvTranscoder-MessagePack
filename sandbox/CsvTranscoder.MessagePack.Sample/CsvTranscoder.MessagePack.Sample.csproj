@@ -9,9 +9,23 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <Content Include="csv\*.csv" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="AndanteTribe.GameKernel.MessagePack" Version="1.0.0" />
       <PackageReference Include="AndanteTribe.Localization.MessagePack" Version="1.0.1" />
       <PackageReference Include="MessagePack" Version="3.1.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\src\CsvTranscoder.MessagePack\CsvTranscoder.MessagePack.csproj" />
+      <ProjectReference Include="..\..\src\CsvTranscoder.MessagePack.GameKernel\CsvTranscoder.MessagePack.GameKernel.csproj" />
+      <ProjectReference Include="..\..\src\CsvTranscoder.MessagePack.Localization\CsvTranscoder.MessagePack.Localization.csproj" />
+      <ProjectReference
+        Include="..\..\src\CsvTranscoder.MessagePack.SourceGenerator\CsvTranscoder.MessagePack.SourceGenerator.csproj"
+        OutputItemType="Analyzer"
+        ReferenceOutputAssembly="false" />
     </ItemGroup>
 
 </Project>

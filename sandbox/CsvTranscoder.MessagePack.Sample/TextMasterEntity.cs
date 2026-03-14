@@ -1,4 +1,5 @@
-﻿using CsvTranscoder.MessagePack.Sample.Enums;
+﻿using CsvTranscoder.MessagePack.Sample.Attributes;
+using CsvTranscoder.MessagePack.Sample.Enums;
 using GameKernel;
 using Localization;
 using MessagePack;
@@ -6,6 +7,7 @@ using MessagePack;
 namespace CsvTranscoder.MessagePack.Sample;
 
 [MessagePackObject]
+[FileName("text")]
 public class TextMasterEntity
 {
     /// <summary>

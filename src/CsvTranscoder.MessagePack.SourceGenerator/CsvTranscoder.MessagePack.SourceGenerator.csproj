@@ -2,12 +2,25 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
-        <LangVersion>latest</LangVersion>
+        <LangVersion>14</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <RootNamespace>AndanteTribe.Csv.SourceGenerator</RootNamespace>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
+        <OutputType>Library</OutputType>
+        <Version>0.1.0</Version>
+
+        <!-- NuGet Packaging -->
+        <PackageId>AndanteTribe.CsvTranscoder.MessagePack.SourceGenerator</PackageId>
+        <PackageVersion>$(Version)</PackageVersion>
+        <Authors>AndanteTribe</Authors>
+        <Copyright>© AndanteTribe</Copyright>
+        <Description>Transcoding CSV data to MessagePack.</Description>
+        <PackageProjectUrl>https://github.com/AndanteTribe/CsvTranscoder-MessagePack</PackageProjectUrl>
+        <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
     </PropertyGroup>
 
     <ItemGroup>

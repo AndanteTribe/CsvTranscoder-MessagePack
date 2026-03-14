@@ -10,7 +10,8 @@ using MessagePack;
 //  1. MasterSampleCsvResolver  — generated formatter for [MessagePackObject] types in this project
 //  2. GameKernelCsvResolver    — formatters for MasterId<T> and Obscured<T>
 //  3. LocalizationCsvResolver  — formatter for LocalizeFormat
-//  4. StandardResolver         — formatters for primitives, enums, string, etc.
+//  4. SampleCsvFormatterResolver — formatters for EnumMember enums
+//  5. StandardResolver         — formatters for primitives, enums, string, etc.
 var csvOptions = new CsvTranscodeOptions
 {
     HasHeader = true,
@@ -20,6 +21,7 @@ var csvOptions = new CsvTranscodeOptions
         MasterSampleCsvResolver.Instance,
         AndanteTribe.Csv.GameKernelCsvResolver.Instance,
         AndanteTribe.Csv.LocalizationCsvResolver.Instance,
+        CsvTranscoder.MessagePack.Sample.SampleCsvFormatterResolver.Instance,
         StandardResolver.Instance)
 };
 

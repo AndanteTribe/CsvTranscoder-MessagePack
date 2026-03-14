@@ -6,8 +6,9 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <OutputType>Library</OutputType>
+
         <RootNamespace>AndanteTribe.Csv</RootNamespace>
-        <Version>0.1.2</Version>
+        <Version>0.1.3</Version>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
         <!-- NuGet -->
@@ -20,10 +21,20 @@
         <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+        <!-- pack hook -->
+        <TargetsForTfmSpecificContentInPackage>
+            $(TargetsForTfmSpecificContentInPackage);PackSourceGenerator
+        </TargetsForTfmSpecificContentInPackage>
+
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="MessagePack" Version="3.1.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\CsvTranscoder.MessagePack.SourceGenerator\CsvTranscoder.MessagePack.SourceGenerator.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -32,11 +43,13 @@
         </AssemblyAttribute>
     </ItemGroup>
 
-    <!-- SourceGenerator参照 -->
-    <ItemGroup>
-        <ProjectReference Include="..\CsvTranscoder.MessagePack.SourceGenerator\CsvTranscoder.MessagePack.SourceGenerator.csproj"
-                          OutputItemType="Analyzer"
-                          ReferenceOutputAssembly="false"/>
-    </ItemGroup>
+    <!-- add analyzers to the package -->
+    <Target Name="PackSourceGenerator">
+        <ItemGroup>
+            <TfmSpecificPackageFile
+                Include="..\CsvTranscoder.MessagePack.SourceGenerator\bin\$(Configuration)\netstandard2.0\CsvTranscoder.MessagePack.SourceGenerator.dll"
+                PackagePath="analyzers/dotnet/cs" />
+        </ItemGroup>
+    </Target>
 
 </Project>

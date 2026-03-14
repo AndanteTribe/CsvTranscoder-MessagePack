@@ -9,12 +9,6 @@ namespace CsvTranscoder.MessagePack.Sample;
 /// <list type="bullet">
 ///   <item>
 ///     <description>
-///       <see cref="string"/> → <see cref="LocalizedMemberJapaneseCsvFormatter"/>:
-///       reads the Japanese value from a paired ja/en column and skips the English column.
-///     </description>
-///   </item>
-///   <item>
-///     <description>
 ///       Any <see langword="enum"/> type → <see cref="EnumMemberCsvFormatter{T}"/>:
 ///       parses <see cref="System.Runtime.Serialization.EnumMemberAttribute"/> values and
 ///       handles <c>_</c>-separated flags.
@@ -22,7 +16,7 @@ namespace CsvTranscoder.MessagePack.Sample;
 ///   </item>
 /// </list>
 /// Place this resolver before <see cref="StandardResolver"/> in a <see cref="CompositeResolver"/>
-/// so that it takes priority over the built-in enum and string formatters.
+/// so that it takes priority over the built-in enum formatter.
 /// </summary>
 public sealed class SampleCsvFormatterResolver : ICsvFormatterResolver
 {
@@ -30,7 +24,6 @@ public sealed class SampleCsvFormatterResolver : ICsvFormatterResolver
 
     private SampleCsvFormatterResolver()
     {
-        Cache<string>.Value = LocalizedMemberJapaneseCsvFormatter.Instance;
     }
 
     private static class Cache<T>

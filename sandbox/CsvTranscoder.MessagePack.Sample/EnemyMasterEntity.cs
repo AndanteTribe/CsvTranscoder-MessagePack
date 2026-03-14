@@ -2,7 +2,6 @@
 using CsvTranscoder.MessagePack.Sample.Enums;
 using CsvTranscoder.MessagePack.Sample.Units;
 using GameKernel;
-using Localization;
 using MessagePack;
 
 namespace CsvTranscoder.MessagePack.Sample;
@@ -32,7 +31,7 @@ public record EnemyMasterEntity
     /// <summary>
     /// 種族.
     /// </summary>
-    [LocalizedMember, Key(1)]
+    [Key(1)]
     public required string Species { get; init; }
 
     /// <summary>

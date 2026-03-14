@@ -10,7 +10,7 @@ using MessagePack;
 //  1. MasterSampleCsvResolver  — generated formatter for [MessagePackObject] types in this project
 //  2. GameKernelCsvResolver    — formatters for MasterId<T> and Obscured<T>
 //  3. LocalizationCsvResolver  — formatter for LocalizeFormat
-//  4. SampleCsvFormatterResolver — formatters for EnumMember enums and LocalizedMember strings
+//  4. SampleCsvFormatterResolver — formatters for EnumMember enums
 //  5. StandardResolver         — formatters for primitives, enums, string, etc.
 var csvOptions = new CsvTranscodeOptions
 {

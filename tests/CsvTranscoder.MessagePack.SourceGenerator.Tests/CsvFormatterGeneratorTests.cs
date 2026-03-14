@@ -6,14 +6,15 @@ namespace CsvTranscoder.MessagePack.SourceGenerator.Tests;
 /// Unit tests for <see cref="AndanteTribe.Csv.SourceGenerator.CsvFormatterGenerator"/>.
 /// Each test creates an in-memory compilation, runs the generator, and inspects either
 /// the generated source code or the output compilation for correctness.
-/// Formatters are generated as <c>internal sealed class {TypeName}CsvFormatter</c> nested
-/// inside the <c>[GeneratedCsvFormatterResolver]</c> partial class, following the same pattern
-/// as MessagePack-CSharp's source generator.
+/// Each formatter is emitted in its own <c>.g.cs</c> partial-class file (e.g.
+/// <c>MyNs.MyResolver.FooCsvFormatter.g.cs</c>) nested inside the resolver class.
+/// The resolver body (Instance, GetFormatter, FormatterLookup) lives in <c>MyNs.MyResolver.g.cs</c>.
+/// File names are PascalCase with dots, matching the convention of MessagePack-CSharp's generator.
 /// </summary>
 public class CsvFormatterGeneratorTests
 {
     // -----------------------------------------------------------------------
-    //  Formatter generation (formatter code lives inside the resolver file)
+    //  Formatter generation (each formatter in its own .g.cs file)
     // -----------------------------------------------------------------------
 
     [Fact]
@@ -37,14 +38,17 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        // Resolver body file: hint name uses PascalCase dots.
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
-        // Formatter is nested inside the resolver as 'internal sealed class FooCsvFormatter'
-        Assert.Contains("internal sealed class FooCsvFormatter", resolverSrc);
-        Assert.Contains("ICsvFormatter<global::MyNs.Foo>", resolverSrc);
-        Assert.Contains("writer.WriteArrayHeader(2)", resolverSrc);
-        Assert.Contains("GetFormatterWithVerify<int>", resolverSrc);
-        Assert.Contains("GetFormatterWithVerify<string>", resolverSrc);
+        // Formatter class definition is in the formatter-specific file.
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.FooCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("internal sealed class FooCsvFormatter", fmtSrc);
+        Assert.Contains("ICsvFormatter<global::MyNs.Foo>", fmtSrc);
+        Assert.Contains("writer.WriteArrayHeader(2)", fmtSrc);
+        Assert.Contains("GetFormatterWithVerify<int>", fmtSrc);
+        Assert.Contains("GetFormatterWithVerify<string>", fmtSrc);
     }
 
     [Fact]
@@ -69,13 +73,17 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
+        // Resolver body references SparseCsvFormatter in FormatterLookup.
         Assert.Contains("SparseCsvFormatter", resolverSrc);
+        // Formatter-specific file has the array header and nil writes.
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.SparseCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
         // Array header must be maxKey+1 = 3
-        Assert.Contains("writer.WriteArrayHeader(3)", resolverSrc);
+        Assert.Contains("writer.WriteArrayHeader(3)", fmtSrc);
         // Sparse slot (key 1) writes nil
-        Assert.Contains("writer.WriteNil();", resolverSrc);
+        Assert.Contains("writer.WriteNil();", fmtSrc);
     }
 
     [Fact]
@@ -99,10 +107,14 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
+        // Resolver body references BarCsvFormatter in FormatterLookup.
         Assert.Contains("BarCsvFormatter", resolverSrc);
-        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
+        // Formatter-specific file has the array header.
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.BarCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", fmtSrc);
     }
 
     [Fact]
@@ -125,9 +137,10 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         // No formatter should be generated for a type with no [Key] members.
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.DoesNotContain("NoKeysCsvFormatter", resolverSrc);
+        Assert.Null(GetGeneratedSource(compilation, "MyNs.MyResolver.NoKeysCsvFormatter.g.cs"));
     }
 
     [Fact]
@@ -173,7 +186,7 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.Contains("partial class MyResolver", resolverSrc);
         Assert.Contains("ICsvFormatterResolver", resolverSrc);
@@ -200,13 +213,17 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
+        // Resolver body (FormatterLookup) references both types.
         Assert.Contains("global::MyNs.TypeA", resolverSrc);
         Assert.Contains("global::MyNs.TypeB", resolverSrc);
-        // Both formatter classes nested inside the resolver
+        // Both formatter class names appear in the lookup table.
         Assert.Contains("TypeACsvFormatter", resolverSrc);
         Assert.Contains("TypeBCsvFormatter", resolverSrc);
+        // Each formatter is in its own file.
+        Assert.NotNull(GetGeneratedSource(compilation, "MyNs.MyResolver.TypeACsvFormatter.g.cs"));
+        Assert.NotNull(GetGeneratedSource(compilation, "MyNs.MyResolver.TypeBCsvFormatter.g.cs"));
     }
 
     [Fact]
@@ -225,11 +242,14 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_GlobalResolver");
+        // Resolver body is in a PascalCase file with no namespace prefix (global namespace).
+        var resolverSrc = GetGeneratedSource(compilation, "GlobalResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.Contains("partial class GlobalResolver", resolverSrc);
-        // Type in global namespace → formatter nested directly in resolver, no partial-class wrapping
+        // Formatter reference appears in the FormatterLookup table.
         Assert.Contains("TopLevelTypeCsvFormatter", resolverSrc);
+        // Formatter is in its own file.
+        Assert.NotNull(GetGeneratedSource(compilation, "GlobalResolver.TopLevelTypeCsvFormatter.g.cs"));
     }
 
     // -----------------------------------------------------------------------
@@ -266,12 +286,17 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.Contains("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK", resolverSrc);
         Assert.Contains("#endif", resolverSrc);
-        // Formatter code is in the same guarded resolver file
+        // Resolver body references FooCsvFormatter in FormatterLookup.
         Assert.Contains("FooCsvFormatter", resolverSrc);
+        // Formatter file is also guarded.
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.FooCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("#if !DISABLE_CSVTRANSCODER_MESSAGEPACK", fmtSrc);
+        Assert.Contains("#endif", fmtSrc);
     }
 
     // -----------------------------------------------------------------------
@@ -300,10 +325,10 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
-        Assert.NotNull(resolverSrc);
         // Only the non-static Id (key 0) should appear; array size should be 1.
-        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.WithStaticCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", fmtSrc);
     }
 
     [Fact]
@@ -328,9 +353,10 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
-        Assert.NotNull(resolverSrc);
-        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
+        // Private member is excluded; only the public Id (key 0) should be in the formatter.
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.WithPrivateCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", fmtSrc);
     }
 
     [Fact]
@@ -356,9 +382,10 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         // All members have string keys → no valid int-key members → no formatter generated.
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.DoesNotContain("StringKeyedCsvFormatter", resolverSrc);
+        Assert.Null(GetGeneratedSource(compilation, "MyNs.MyResolver.StringKeyedCsvFormatter.g.cs"));
     }
 
     [Fact]
@@ -383,12 +410,17 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
+        // FormatterLookup references MixedKeysCsvFormatter.
         Assert.Contains("MixedKeysCsvFormatter", resolverSrc);
         // Only the int-keyed Id member should be in the formatter.
-        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
-        Assert.DoesNotContain("Name", resolverSrc);
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.MixedKeysCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", fmtSrc);
+        // The string-keyed "Name" member must not cause a formatter call.
+        Assert.Contains("GetFormatterWithVerify<int>", fmtSrc);
+        Assert.DoesNotContain("GetFormatterWithVerify<string>", fmtSrc);
     }
 
     [Fact]
@@ -412,11 +444,13 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.Contains("WithFieldCsvFormatter", resolverSrc);
-        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
-        Assert.Contains("GetFormatterWithVerify<int>", resolverSrc);
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.WithFieldCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", fmtSrc);
+        Assert.Contains("GetFormatterWithVerify<int>", fmtSrc);
     }
 
     [Fact]
@@ -435,7 +469,7 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_EmptyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.EmptyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.Contains("partial class EmptyResolver", resolverSrc);
         Assert.Contains("return null;", resolverSrc);
@@ -464,11 +498,13 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.Contains("MyStructCsvFormatter", resolverSrc);
-        Assert.Contains("ICsvFormatter<global::MyNs.MyStruct>", resolverSrc);
-        Assert.Contains("writer.WriteArrayHeader(2)", resolverSrc);
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.MyStructCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("ICsvFormatter<global::MyNs.MyStruct>", fmtSrc);
+        Assert.Contains("writer.WriteArrayHeader(2)", fmtSrc);
     }
 
     // -----------------------------------------------------------------------
@@ -494,14 +530,14 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
-        Assert.NotNull(resolverSrc);
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.FooCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
         // The namespace 'MyNs' should appear as an internal partial class wrapper inside resolver
-        Assert.Contains("internal partial class MyNs", resolverSrc);
+        Assert.Contains("internal partial class MyNs", fmtSrc);
         // The formatter class is internal sealed
-        Assert.Contains("internal sealed class FooCsvFormatter", resolverSrc);
+        Assert.Contains("internal sealed class FooCsvFormatter", fmtSrc);
         // Uses simple type name (not flat underscore-separated name)
-        Assert.DoesNotContain("MyNs_FooCsvFormatter", resolverSrc);
+        Assert.DoesNotContain("MyNs_FooCsvFormatter", fmtSrc);
     }
 
     [Fact]
@@ -523,7 +559,7 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.Contains("private static class FormatterLookup", resolverSrc);
         Assert.DoesNotContain("namespace AndanteTribe.Csv.Generated", resolverSrc);
@@ -556,9 +592,10 @@ public class CsvFormatterGeneratorTests
         var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         Assert.DoesNotContain("PrivateInnerCsvFormatter", resolverSrc);
+        Assert.Null(GetGeneratedSource(compilation, "MyNs.MyResolver.PrivateInnerCsvFormatter.g.cs"));
     }
 
     [Fact]
@@ -582,10 +619,14 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
+        // Resolver body references InternalFooCsvFormatter in FormatterLookup.
         Assert.Contains("InternalFooCsvFormatter", resolverSrc);
-        Assert.Contains("internal sealed class InternalFooCsvFormatter", resolverSrc);
+        // Formatter class definition is in the formatter-specific file.
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.InternalFooCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("internal sealed class InternalFooCsvFormatter", fmtSrc);
     }
 
     [Fact]
@@ -611,10 +652,10 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
-        Assert.NotNull(resolverSrc);
         // Only key 0 (Valid) should appear; array size should be 1.
-        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.WithNegativeKeyCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", fmtSrc);
     }
 
     [Fact]
@@ -642,9 +683,9 @@ public class CsvFormatterGeneratorTests
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error
             && d.GetMessage().Contains("Exception"));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
-        Assert.NotNull(resolverSrc);
-        Assert.Contains("writer.WriteArrayHeader(1)", resolverSrc);
+        var fmtSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.WithDuplicateKeyCsvFormatter.g.cs");
+        Assert.NotNull(fmtSrc);
+        Assert.Contains("writer.WriteArrayHeader(1)", fmtSrc);
     }
 
     [Fact]
@@ -666,7 +707,7 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         // No resolver should be generated for the generic class.
-        Assert.Null(GetGeneratedSource(compilation, "Resolver_MyNs_GenericResolver"));
+        Assert.Null(GetGeneratedSource(compilation, "MyNs.GenericResolver.g.cs"));
     }
 
     [Fact]
@@ -687,7 +728,7 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        var resolverSrc = GetGeneratedSource(compilation, "MyNs.MyResolver.g.cs");
         Assert.NotNull(resolverSrc);
         // The generated partial declaration must carry the accessibility modifier.
         Assert.Contains("public partial class MyResolver", resolverSrc);
@@ -723,8 +764,8 @@ public class CsvFormatterGeneratorTests
 
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
 
-        var resolverA = GetGeneratedSource(compilation, "Resolver_NsA_MyResolver");
-        var resolverB = GetGeneratedSource(compilation, "Resolver_NsB_MyResolver");
+        var resolverA = GetGeneratedSource(compilation, "NsA.MyResolver.g.cs");
+        var resolverB = GetGeneratedSource(compilation, "NsB.MyResolver.g.cs");
         Assert.NotNull(resolverA);
         Assert.NotNull(resolverB);
         // Each resolver's FormatterLookup is private and independent — no collision.

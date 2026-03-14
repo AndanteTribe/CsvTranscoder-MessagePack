@@ -268,6 +268,154 @@ public class CsvFormatterGeneratorTests
     }
 
     // -----------------------------------------------------------------------
+    //  Member filtering
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void SkipsStaticMembers()
+    {
+        // Static members should be ignored even when decorated with [Key].
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            public class WithStatic
+            {
+                [Key(0)] public int Id { get; set; }
+                [Key(1)] public static int StaticProp { get; set; }
+            }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithStatic");
+        Assert.NotNull(src);
+        // Only the non-static Id (key 0) should appear; array size should be 1.
+        Assert.Contains("writer.WriteArrayHeader(1)", src);
+    }
+
+    [Fact]
+    public void SkipsNonPublicMembers()
+    {
+        // Private/internal members must be excluded.
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            public class WithPrivate
+            {
+                [Key(0)] public int Id { get; set; }
+                [Key(1)] private string Secret { get; set; } = "";
+            }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithPrivate");
+        Assert.NotNull(src);
+        Assert.Contains("writer.WriteArrayHeader(1)", src);
+    }
+
+    [Fact]
+    public void SkipsStringKeyMembers()
+    {
+        // String-keyed members are map-mode and must be skipped; if ALL keys are
+        // strings the type should produce no formatter at all.
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            public class StringKeyed
+            {
+                [Key("id")] public int Id { get; set; }
+                [Key("name")] public string Name { get; set; } = "";
+            }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+        // All members have string keys → no valid int-key members → no formatter generated.
+        Assert.Null(GetGeneratedSource(compilation, "Formatter_MyNs_StringKeyed"));
+    }
+
+    [Fact]
+    public void SkipsStringKeyMembers_MixedWithIntKeys()
+    {
+        // Only int-keyed members contribute to the formatter; string-keyed members are skipped.
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            public class MixedKeys
+            {
+                [Key(0)] public int Id { get; set; }
+                [Key("name")] public string Name { get; set; } = "";
+            }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var src = GetGeneratedSource(compilation, "Formatter_MyNs_MixedKeys");
+        Assert.NotNull(src);
+        // Only the int-keyed Id member should be in the formatter.
+        Assert.Contains("writer.WriteArrayHeader(1)", src);
+        Assert.DoesNotContain("Name", src);
+    }
+
+    [Fact]
+    public void GeneratesFormatter_ForPublicField()
+    {
+        // Public fields (not just properties) should be picked up by the generator.
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            public class WithField
+            {
+                [Key(0)] public int Value;
+            }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithField");
+        Assert.NotNull(src);
+        Assert.Contains("writer.WriteArrayHeader(1)", src);
+        Assert.Contains("GetFormatterWithVerify<int>", src);
+    }
+
+    [Fact]
+    public void GeneratedResolver_WithNoFormattableTypes()
+    {
+        // A [GeneratedCsvFormatterResolver] class with no valid [MessagePackObject]
+        // types in the compilation should still produce a resolver (with an empty lookup).
+        const string source = """
+            using AndanteTribe.Csv;
+            namespace MyNs;
+            [GeneratedCsvFormatterResolver]
+            public partial class EmptyResolver { }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_EmptyResolver");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("partial class EmptyResolver", resolverSrc);
+        Assert.Contains("return null;", resolverSrc);
+    }
+
+    // -----------------------------------------------------------------------
     //  Struct support
     // -----------------------------------------------------------------------
 

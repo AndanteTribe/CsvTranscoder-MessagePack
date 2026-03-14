@@ -1,9 +1,10 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
+using AndanteTribe.Csv;
 using MessagePack;
 
-namespace AndanteTribe.Csv.Formatters;
+namespace CsvTranscoder.MessagePack.Sample.Formatters;
 
 /// <summary>
 /// An <see cref="ICsvFormatter{T}"/> for <see langword="enum"/> types that supports

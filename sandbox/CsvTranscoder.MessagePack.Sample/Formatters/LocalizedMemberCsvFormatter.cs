@@ -1,12 +1,11 @@
-using Localization;
+using AndanteTribe.Csv;
 using MessagePack;
 
-namespace AndanteTribe.Csv.Formatters;
+namespace CsvTranscoder.MessagePack.Sample.Formatters;
 
 /// <summary>
-/// An <see cref="ICsvFormatter{T}"/> for <see cref="string"/> members decorated with
-/// <see cref="LocalizedMemberAttribute"/> where two consecutive CSV columns hold the
-/// Japanese and English values respectively.
+/// An <see cref="ICsvFormatter{T}"/> for <see cref="string"/> members where two consecutive CSV
+/// columns hold the Japanese and English values respectively.
 /// This formatter reads the <b>Japanese</b> (first) column and skips the English (second) column.
 /// </summary>
 public sealed class LocalizedMemberJapaneseCsvFormatter : ICsvFormatter<string>
@@ -22,9 +21,8 @@ public sealed class LocalizedMemberJapaneseCsvFormatter : ICsvFormatter<string>
 }
 
 /// <summary>
-/// An <see cref="ICsvFormatter{T}"/> for <see cref="string"/> members decorated with
-/// <see cref="LocalizedMemberAttribute"/> where two consecutive CSV columns hold the
-/// Japanese and English values respectively.
+/// An <see cref="ICsvFormatter{T}"/> for <see cref="string"/> members where two consecutive CSV
+/// columns hold the Japanese and English values respectively.
 /// This formatter skips the Japanese (first) column and reads the <b>English</b> (second) column.
 /// </summary>
 public sealed class LocalizedMemberEnglishCsvFormatter : ICsvFormatter<string>

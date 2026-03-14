@@ -8,7 +8,7 @@ using MessagePack;
 namespace CsvTranscoder.MessagePack.Sample;
 
 [MessagePackObject]
-[FileName("enem")]
+[FileName("enemy")]
 public record EnemyMasterEntity
 {
     private readonly Obscured<MasterId<BattleField>> _id;

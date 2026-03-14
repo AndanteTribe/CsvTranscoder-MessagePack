@@ -1,9 +1,12 @@
-﻿using CsvTranscoder.MessagePack.Sample.Enums;
+﻿using CsvTranscoder.MessagePack.Sample.Attributes;
+using CsvTranscoder.MessagePack.Sample.Enums;
 using GameKernel;
 using MessagePack;
 
 namespace CsvTranscoder.MessagePack.Sample;
 
+[MessagePackObject]
+[FileName("enemy_ground")]
 public record GroundEnemyMasterEntity
 {
     private readonly Obscured<MasterId<GroundEnemyCategory>> _id;

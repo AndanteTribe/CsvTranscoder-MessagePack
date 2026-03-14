@@ -1,7 +1,8 @@
-using System.Buffers;
+using System.Reflection;
 using AndanteTribe.Csv;
 using AndanteTribe.Utils.MasterSample;
 using CsvTranscoder.MessagePack.Sample;
+using CsvTranscoder.MessagePack.Sample.Attributes;
 using CsvTranscoder.MessagePack.Sample.Units;
 using MessagePack;
 
@@ -25,15 +26,49 @@ var csvOptions = new CsvTranscodeOptions
 Console.WriteLine("CsvTranscoder + SourceGenerator sample");
 Console.WriteLine();
 
-// Verify that the generated resolver can find the generated formatters.
-var basicStatusFormatter = MasterSampleCsvResolver.Instance.GetFormatter<BasicStatus>();
-Console.WriteLine($"BasicStatus formatter      : {basicStatusFormatter?.GetType().Name ?? "(null)"}");
+// Show that the generated resolver has formatters for the project's types.
+Console.WriteLine("--- Generated formatters ---");
+Console.WriteLine($"BasicStatus            : {MasterSampleCsvResolver.Instance.GetFormatter<BasicStatus>()?.GetType().Name ?? "(null)"}");
+Console.WriteLine($"CompatibilityGroup     : {MasterSampleCsvResolver.Instance.GetFormatter<CompatibilityGroup>()?.GetType().Name ?? "(null)"}");
+Console.WriteLine($"EnemyMasterEntity      : {MasterSampleCsvResolver.Instance.GetFormatter<EnemyMasterEntity>()?.GetType().Name ?? "(null)"}");
+Console.WriteLine($"GroundEnemyMasterEntity: {MasterSampleCsvResolver.Instance.GetFormatter<GroundEnemyMasterEntity>()?.GetType().Name ?? "(null)"}");
+Console.WriteLine($"TextMasterEntity       : {MasterSampleCsvResolver.Instance.GetFormatter<TextMasterEntity>()?.GetType().Name ?? "(null)"}");
+Console.WriteLine();
 
-var compatFormatter = MasterSampleCsvResolver.Instance.GetFormatter<CompatibilityGroup>();
-Console.WriteLine($"CompatibilityGroup formatter: {compatFormatter?.GetType().Name ?? "(null)"}");
+// Load CSV tables from the csv/ directory.
+// [FileName] on each entity type maps it to its source CSV file.
+Console.WriteLine("--- Loading CSV tables via generated formatters ---");
+var csvDir = Path.Combine(AppContext.BaseDirectory, "csv");
 
-var enemyFormatter = MasterSampleCsvResolver.Instance.GetFormatter<EnemyMasterEntity>();
-Console.WriteLine($"EnemyMasterEntity formatter : {enemyFormatter?.GetType().Name ?? "(null)"}");
+await LoadAndPrintAsync<EnemyMasterEntity>(csvDir, csvOptions);
+await LoadAndPrintAsync<GroundEnemyMasterEntity>(csvDir, csvOptions);
+await LoadAndPrintAsync<TextMasterEntity>(csvDir, csvOptions);
 
-var textFormatter = MasterSampleCsvResolver.Instance.GetFormatter<TextMasterEntity>();
-Console.WriteLine($"TextMasterEntity formatter  : {textFormatter?.GetType().Name ?? "(null)"}");
+// Locate the CSV file via [FileName], transcode it through the generated ICsvFormatter<T>,
+// and display the resulting MessagePack payload as JSON.
+static async Task LoadAndPrintAsync<T>(string csvDir, CsvTranscodeOptions options)
+{
+    var attr = typeof(T).GetCustomAttribute<FileNameAttribute>()
+               ?? throw new InvalidOperationException(
+                   $"{typeof(T).Name} must be decorated with [FileName].");
+
+    var csvPath = Path.Combine(csvDir, $"{attr.Name}.csv");
+    Console.WriteLine($"=== {typeof(T).Name}  ←  {attr.Name}.csv ===");
+
+    try
+    {
+        using var inputStream = File.OpenRead(csvPath);
+        using var outputStream = new MemoryStream();
+        await AndanteTribe.Csv.CsvTranscoder.ToMessagePackAsync<T>(inputStream, outputStream, options);
+
+        var json = MessagePackSerializer.ConvertToJson(outputStream.ToArray());
+        const int maxJsonDisplayLength = 1000;
+        Console.WriteLine(json.Length > maxJsonDisplayLength ? json[..maxJsonDisplayLength] + " …" : json);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[ERROR] {ex.GetType().Name}: {ex.Message}");
+    }
+
+    Console.WriteLine();
+}

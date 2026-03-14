@@ -9,6 +9,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <Content Include="csv\*.csv" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="AndanteTribe.GameKernel.MessagePack" Version="1.0.0" />
       <PackageReference Include="AndanteTribe.Localization.MessagePack" Version="1.0.1" />
       <PackageReference Include="MessagePack" Version="3.1.4" />

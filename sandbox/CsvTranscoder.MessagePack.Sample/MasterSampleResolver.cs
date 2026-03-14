@@ -1,6 +1,6 @@
 using MessagePack;
 
-namespace AndanteTribe.Utils.MasterSample;
+namespace CsvTranscoder.MessagePack.Sample;
 
 [GeneratedMessagePackResolver]
 public partial class MasterSampleResolver

@@ -63,6 +63,7 @@ namespace AndanteTribe.Csv
         public string FullyQualifiedName { get; set; } = string.Empty;
         public string FormatterClassName { get; set; } = string.Empty;
         public string FileHintName { get; set; } = string.Empty;
+        public string Accessibility { get; set; } = "public";
         public List<KeyMemberModel> Members { get; set; } = new List<KeyMemberModel>();
         public int MaxKey { get; set; }
     }
@@ -78,6 +79,8 @@ namespace AndanteTribe.Csv
         public string Namespace { get; set; } = string.Empty;
         public string ClassName { get; set; } = string.Empty;
         public string FileHintName { get; set; } = string.Empty;
+        public string Accessibility { get; set; } = "public";
+        public string LookupClassName { get; set; } = string.Empty;
     }
 
     // -----------------------------------------------------------------------
@@ -145,6 +148,16 @@ namespace AndanteTribe.Csv
         // Skip open generic types — the formatter would also need to be generic, which is unsupported.
         if (typeSymbol.IsGenericType) return null;
 
+        // Skip types that are not publicly or internally accessible (e.g., private nested types).
+        // A public formatter cannot implement ICsvFormatter<T> for a less-accessible T.
+        if (typeSymbol.DeclaredAccessibility != Accessibility.Public &&
+            typeSymbol.DeclaredAccessibility != Accessibility.Internal)
+            return null;
+
+        var accessibilityKeyword = typeSymbol.DeclaredAccessibility == Accessibility.Internal
+            ? "internal"
+            : "public";
+
         var members = new List<KeyMemberModel>();
 
         foreach (var member in typeSymbol.GetMembers())
@@ -192,6 +205,10 @@ namespace AndanteTribe.Csv
 
             if (keyValue is null) continue;
 
+            // Skip negative key values — MessagePack's own analyzer already warns about these,
+            // and a negative MaxKey would make the array-header loop never run.
+            if (keyValue < 0) continue;
+
             members.Add(new KeyMemberModel
             {
                 Key = keyValue.Value,
@@ -221,6 +238,7 @@ namespace AndanteTribe.Csv
             FullyQualifiedName = fqn,
             FormatterClassName = flatName + "CsvFormatter",
             FileHintName = "Formatter_" + flatName,
+            Accessibility = accessibilityKeyword,
             Members = members,
             MaxKey = maxKey
         };
@@ -229,6 +247,10 @@ namespace AndanteTribe.Csv
     private static ResolverModel? GetResolverModel(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
     {
         if (ctx.TargetSymbol is not INamedTypeSymbol classSymbol) return null;
+
+        // Skip generic classes — the generator would emit an incorrect (non-generic) partial
+        // declaration that clashes with the user's generic type.
+        if (classSymbol.IsGenericType) return null;
 
         var ns = classSymbol.ContainingNamespace is { IsGlobalNamespace: false } nsSymbol
             ? nsSymbol.ToDisplayString()
@@ -239,11 +261,22 @@ namespace AndanteTribe.Csv
             + (ns.Length > 0 ? ns.Replace(".", "_") + "_" : string.Empty)
             + className;
 
+        var accessibilityKeyword = classSymbol.DeclaredAccessibility == Accessibility.Internal
+            ? "internal"
+            : "public";
+
+        // Prefix the namespace to make the lookup class name unique within AndanteTribe.Csv.Generated,
+        // avoiding collisions when two resolvers in different namespaces share the same class name.
+        var lookupClassName = (ns.Length > 0 ? ns.Replace(".", "_") + "_" : string.Empty)
+            + className + "FormatterLookup";
+
         return new ResolverModel
         {
             Namespace = ns,
             ClassName = className,
-            FileHintName = fileHintName
+            FileHintName = fileHintName,
+            Accessibility = accessibilityKeyword,
+            LookupClassName = lookupClassName
         };
     }
 
@@ -261,7 +294,7 @@ namespace AndanteTribe.Csv
         sb.AppendLine("namespace AndanteTribe.Csv.Generated");
         sb.AppendLine("{");
         sb.AppendLine($"    /// <summary>Auto-generated <c>ICsvFormatter</c> for <see cref=\"{model.FullyQualifiedName}\"/>.</summary>");
-        sb.AppendLine($"    public sealed class {model.FormatterClassName} : global::AndanteTribe.Csv.ICsvFormatter<{model.FullyQualifiedName}>");
+        sb.AppendLine($"    {model.Accessibility} sealed class {model.FormatterClassName} : global::AndanteTribe.Csv.ICsvFormatter<{model.FullyQualifiedName}>");
         sb.AppendLine("    {");
         sb.AppendLine($"        public static readonly {model.FormatterClassName} Instance = new {model.FormatterClassName}();");
         sb.AppendLine();
@@ -272,9 +305,13 @@ namespace AndanteTribe.Csv
         sb.AppendLine($"            writer.WriteArrayHeader({model.MaxKey + 1});");
 
         // Build index for O(1) lookup while iterating over 0..maxKey.
+        // Use ContainsKey so duplicate key values keep the first member (first declaration wins).
         var membersByKey = new Dictionary<int, KeyMemberModel>();
         foreach (var m in model.Members)
-            membersByKey[m.Key] = m;
+        {
+            if (!membersByKey.ContainsKey(m.Key))
+                membersByKey[m.Key] = m;
+        }
 
         for (var key = 0; key <= model.MaxKey; key++)
         {
@@ -317,7 +354,7 @@ namespace AndanteTribe.Csv
             indent = "    ";
         }
 
-        sb.AppendLine($"{indent}partial class {model.ClassName} : global::AndanteTribe.Csv.ICsvFormatterResolver");
+        sb.AppendLine($"{indent}{model.Accessibility} partial class {model.ClassName} : global::AndanteTribe.Csv.ICsvFormatterResolver");
         sb.AppendLine($"{indent}{{");
         sb.AppendLine($"{indent}    public static readonly {model.ClassName} Instance = new {model.ClassName}();");
         sb.AppendLine();
@@ -326,7 +363,7 @@ namespace AndanteTribe.Csv
         sb.AppendLine($"{indent}    private static class Cache<T>");
         sb.AppendLine($"{indent}    {{");
         sb.AppendLine($"{indent}        public static readonly global::AndanteTribe.Csv.ICsvFormatter<T>? Value =");
-        sb.AppendLine($"{indent}            global::AndanteTribe.Csv.Generated.{model.ClassName}FormatterLookup.GetFormatter(typeof(T)) as global::AndanteTribe.Csv.ICsvFormatter<T>;");
+        sb.AppendLine($"{indent}            global::AndanteTribe.Csv.Generated.{model.LookupClassName}.GetFormatter(typeof(T)) as global::AndanteTribe.Csv.ICsvFormatter<T>;");
         sb.AppendLine($"{indent}    }}");
         sb.AppendLine();
         sb.AppendLine($"{indent}    public global::AndanteTribe.Csv.ICsvFormatter<T>? GetFormatter<T>() => Cache<T>.Value;");
@@ -339,7 +376,7 @@ namespace AndanteTribe.Csv
         sb.AppendLine();
         sb.AppendLine("namespace AndanteTribe.Csv.Generated");
         sb.AppendLine("{");
-        sb.AppendLine($"    internal static class {model.ClassName}FormatterLookup");
+        sb.AppendLine($"    internal static class {model.LookupClassName}");
         sb.AppendLine("    {");
         sb.AppendLine("        public static object? GetFormatter(global::System.Type t)");
         sb.AppendLine("        {");

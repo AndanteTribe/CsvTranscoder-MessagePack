@@ -442,6 +442,195 @@ public class CsvFormatterGeneratorTests
     }
 
     // -----------------------------------------------------------------------
+    //  Code-review fixes (accessibility, duplicate keys, negative keys, etc.)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void SkipsNonPublicMessagePackObjectType()
+    {
+        // Private nested types should produce no formatter: the generated formatter
+        // would need to be less accessible than 'public', which breaks the enclosing
+        // 'AndanteTribe.Csv.Generated' namespace convention.
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            public class Outer
+            {
+                [MessagePackObject]
+                private class PrivateInner
+                {
+                    [Key(0)] public int Id { get; set; }
+                }
+            }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+        Assert.Null(GetGeneratedSource(compilation, "Formatter_MyNs_Outer_PrivateInner"));
+    }
+
+    [Fact]
+    public void GeneratesFormatter_ForInternalType_WithInternalAccessibility()
+    {
+        // Internal [MessagePackObject] types should produce an 'internal' formatter class.
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            internal class InternalFoo
+            {
+                [Key(0)] public int Id { get; set; }
+            }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var src = GetGeneratedSource(compilation, "Formatter_MyNs_InternalFoo");
+        Assert.NotNull(src);
+        Assert.Contains("internal sealed class", src);
+    }
+
+    [Fact]
+    public void SkipsNegativeKeyMembers()
+    {
+        // Members decorated with a negative [Key] value are skipped.
+        // MessagePack's own analyzer already warns about negative keys.
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            public class WithNegativeKey
+            {
+                [Key(0)] public int Valid { get; set; }
+                [Key(-1)] public int Invalid { get; set; }
+            }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithNegativeKey");
+        Assert.NotNull(src);
+        // Only key 0 (Valid) should appear; array size should be 1.
+        Assert.Contains("writer.WriteArrayHeader(1)", src);
+    }
+
+    [Fact]
+    public void HandlesDuplicateKeys_DoesNotThrow()
+    {
+        // When two members share the same integer key, the generator must not throw.
+        // The first member in declaration order wins; the duplicate is silently dropped.
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            public class WithDuplicateKey
+            {
+                [Key(0)] public int First { get; set; }
+                [Key(0)] public int Second { get; set; }
+            }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        // Must not produce generator errors (no exception propagated as diagnostics).
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error
+            && d.GetMessage().Contains("Exception"));
+
+        var src = GetGeneratedSource(compilation, "Formatter_MyNs_WithDuplicateKey");
+        Assert.NotNull(src);
+        Assert.Contains("writer.WriteArrayHeader(1)", src);
+    }
+
+    [Fact]
+    public void SkipsGenericResolverClass()
+    {
+        // A generic [GeneratedCsvFormatterResolver] class must be ignored:
+        // the generator cannot emit a non-generic partial matching a generic declaration.
+        const string source = """
+            using MessagePack;
+            using AndanteTribe.Csv;
+            namespace MyNs;
+            [MessagePackObject]
+            public class Foo { [Key(0)] public int Id { get; set; } }
+            [GeneratedCsvFormatterResolver]
+            public partial class GenericResolver<T> { }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+        // No resolver should be generated for the generic class.
+        Assert.Null(GetGeneratedSource(compilation, "Resolver_MyNs_GenericResolver"));
+    }
+
+    [Fact]
+    public void GeneratedResolver_IncludesAccessibilityModifier()
+    {
+        // The generated partial class must include the same accessibility as the user declaration.
+        const string source = """
+            using MessagePack;
+            using AndanteTribe.Csv;
+            namespace MyNs;
+            [MessagePackObject]
+            public class Foo { [Key(0)] public int Id { get; set; } }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var resolverSrc = GetGeneratedSource(compilation, "Resolver_MyNs_MyResolver");
+        Assert.NotNull(resolverSrc);
+        // The generated partial declaration must carry the accessibility modifier.
+        Assert.Contains("public partial class MyResolver", resolverSrc);
+    }
+
+    [Fact]
+    public void GeneratedResolver_UniqueLookupClassName_WhenSameResolverNameInDifferentNamespaces()
+    {
+        // Two resolvers with the same class name in different namespaces must produce
+        // distinct lookup class names in AndanteTribe.Csv.Generated.
+        const string sourceA = """
+            using MessagePack;
+            using AndanteTribe.Csv;
+            namespace NsA;
+            [MessagePackObject]
+            public class Foo { [Key(0)] public int Id { get; set; } }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
+            """;
+
+        const string sourceB = """
+            using MessagePack;
+            using AndanteTribe.Csv;
+            namespace NsB;
+            [MessagePackObject]
+            public class Bar { [Key(0)] public int Id { get; set; } }
+            [GeneratedCsvFormatterResolver]
+            public partial class MyResolver { }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(sourceA, sourceB);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var resolverA = GetGeneratedSource(compilation, "Resolver_NsA_MyResolver");
+        var resolverB = GetGeneratedSource(compilation, "Resolver_NsB_MyResolver");
+        Assert.NotNull(resolverA);
+        Assert.NotNull(resolverB);
+        // Each resolver must reference its own uniquely-named lookup class.
+        Assert.Contains("NsA_MyResolverFormatterLookup", resolverA);
+        Assert.Contains("NsB_MyResolverFormatterLookup", resolverB);
+    }
+
+    // -----------------------------------------------------------------------
     //  Helpers
     // -----------------------------------------------------------------------
 

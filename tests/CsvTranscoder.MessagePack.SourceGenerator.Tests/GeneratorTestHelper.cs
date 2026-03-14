@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Reflection;
 using AndanteTribe.Csv.SourceGenerator;
 using MessagePack;
 using Microsoft.CodeAnalysis;
@@ -12,9 +11,13 @@ namespace CsvTranscoder.MessagePack.SourceGenerator.Tests;
 /// <summary>Utility for running <see cref="CsvFormatterGenerator"/> in unit tests.</summary>
 internal static class GeneratorTestHelper
 {
-    // Anchor on a known MessagePack type to get the assembly location reliably.
-    private static readonly string s_messagePackAssemblyPath =
+    // Anchor on a known MessagePack annotation type to get the MessagePack.Annotations assembly.
+    private static readonly string s_messagePackAnnotationsAssemblyPath =
         typeof(MessagePackObjectAttribute).Assembly.Location;
+
+    // Anchor on MessagePackWriter to get the main MessagePack assembly (separate from Annotations).
+    private static readonly string s_messagePackCoreAssemblyPath =
+        typeof(global::MessagePack.MessagePackWriter).Assembly.Location;
 
     // Anchor on a known CsvTranscoder type to get the assembly location reliably.
     private static readonly string s_csvTranscoderAssemblyPath =
@@ -46,7 +49,8 @@ internal static class GeneratorTestHelper
 
         TryAdd(typeof(object).Assembly.Location);
         TryAdd(typeof(Console).Assembly.Location);
-        TryAdd(s_messagePackAssemblyPath);
+        TryAdd(s_messagePackAnnotationsAssemblyPath);
+        TryAdd(s_messagePackCoreAssemblyPath);
         TryAdd(s_csvTranscoderAssemblyPath);
 
         // Add all currently-loaded assemblies so the compilation has a full BCL.
@@ -65,8 +69,15 @@ internal static class GeneratorTestHelper
         var generator = new CsvFormatterGenerator();
         var driver = CSharpGeneratorDriver
             .Create(generator)
-            .RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+            .RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
-        return (outputCompilation, diagnostics);
+        // Merge generator diagnostics with compilation diagnostics so tests catch both
+        // code-generation failures and compile-time errors in the generated output.
+        // Filter to errors and warnings only to avoid expensive enumeration of all hints.
+        var allDiagnostics = generatorDiagnostics.AddRange(
+            outputCompilation.GetDiagnostics().Where(
+                d => d.Severity >= DiagnosticSeverity.Warning));
+
+        return (outputCompilation, allDiagnostics);
     }
 }

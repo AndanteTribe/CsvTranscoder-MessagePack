@@ -693,6 +693,8 @@ public class CsvFormatterGeneratorTests
     {
         // A generic [GeneratedCsvFormatterResolver] class must be ignored:
         // the generator cannot emit a non-generic partial matching a generic declaration.
+        // Since no valid user-defined resolver exists, a default GeneratedCsvFormatterResolver
+        // is emitted in the AndanteTribe.Csv namespace instead.
         const string source = """
             using MessagePack;
             using AndanteTribe.Csv;
@@ -708,6 +710,36 @@ public class CsvFormatterGeneratorTests
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         // No resolver should be generated for the generic class.
         Assert.Null(GetGeneratedSource(compilation, "MyNs.GenericResolver.g.cs"));
+        // A default resolver is generated in AndanteTribe.Csv instead.
+        Assert.NotNull(GetGeneratedSource(compilation, "AndanteTribe.Csv.GeneratedCsvFormatterResolver.g.cs"));
+    }
+
+    [Fact]
+    public void GeneratesDefaultResolver_WhenNoUserDefinedResolverExists()
+    {
+        // When no [GeneratedCsvFormatterResolver] class is present, the generator should
+        // automatically emit a default GeneratedCsvFormatterResolver in the AndanteTribe.Csv
+        // namespace — mirroring MessagePack's GeneratedMessagePackResolver fallback behavior.
+        const string source = """
+            using MessagePack;
+            namespace MyNs;
+            [MessagePackObject]
+            public class Foo { [Key(0)] public int Id { get; set; } }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+        // Default resolver is emitted in the AndanteTribe.Csv namespace.
+        var resolverSrc = GetGeneratedSource(compilation, "AndanteTribe.Csv.GeneratedCsvFormatterResolver.g.cs");
+        Assert.NotNull(resolverSrc);
+        Assert.Contains("public partial class GeneratedCsvFormatterResolver", resolverSrc);
+        Assert.Contains("ICsvFormatterResolver", resolverSrc);
+        Assert.Contains("FooCsvFormatter", resolverSrc);
+        // FooCsvFormatter must be registered in the FormatterLookup table.
+        Assert.Contains("typeof(global::MyNs.Foo)", resolverSrc);
+        // Formatter is in its own file, nested inside the default resolver.
+        Assert.NotNull(GetGeneratedSource(compilation, "AndanteTribe.Csv.GeneratedCsvFormatterResolver.FooCsvFormatter.g.cs"));
     }
 
     [Fact]

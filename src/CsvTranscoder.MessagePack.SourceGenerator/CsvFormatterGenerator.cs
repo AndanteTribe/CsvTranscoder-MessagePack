@@ -108,39 +108,70 @@ namespace AndanteTribe.Csv
             .Collect();
 
         // Pipeline 2: collect all [GeneratedCsvFormatterResolver] classes.
+        // Collected so that we can detect the "no resolver defined" case and fall back
+        // to a default GeneratedCsvFormatterResolver — matching MessagePack's behavior.
         var resolverClasses = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GeneratedCsvFormatterResolverAttributeFqn,
                 predicate: static (node, _) => node is ClassDeclarationSyntax,
                 transform: static (ctx, ct) => GetResolverModel(ctx, ct))
-            .Where(static m => m is not null);
+            .Where(static m => m is not null)
+            .Collect();
 
-        // Output: resolver body file + one file per formatter type.
-        // The resolver body carries Instance / GetFormatter / FormatterLookup.
-        // Each formatter is a nested partial class inside the resolver, in its own file —
-        // the same split-file pattern used by MessagePack-CSharp's source generator.
+        // Output: for each user-defined resolver, emit its files.
+        // If no user-defined resolvers exist, emit a default GeneratedCsvFormatterResolver
+        // in the AndanteTribe.Csv namespace — mirroring MessagePack's GeneratedMessagePackResolver.
         context.RegisterSourceOutput(
             resolverClasses.Combine(messagePackTypes),
             static (ctx, pair) =>
             {
-                var (resolver, types) = pair;
-                if (resolver is null) return;
-
+                var (resolvers, types) = pair;
                 var validTypes = types.Where(static t => t is not null).ToList();
 
-                // 1) Resolver body file — Instance, GetFormatter<T>, FormatterLookup.
-                ctx.AddSource(
-                    resolver.FileHintName + ".g.cs",
-                    SourceText.From(GenerateResolverBody(resolver, validTypes), Encoding.UTF8));
-
-                // 2) One partial-class file per formatter type.
-                foreach (var type in validTypes)
+                if (resolvers.IsDefaultOrEmpty)
                 {
-                    ctx.AddSource(
-                        resolver.FileHintName + "." + type!.FormatterSimpleName + ".g.cs",
-                        SourceText.From(GenerateFormatterFile(resolver, type), Encoding.UTF8));
+                    // No user-defined resolver — emit the default GeneratedCsvFormatterResolver.
+                    var defaultResolver = new ResolverModel
+                    {
+                        Namespace = "AndanteTribe.Csv",
+                        ClassName = "GeneratedCsvFormatterResolver",
+                        FileHintName = "AndanteTribe.Csv.GeneratedCsvFormatterResolver",
+                        Accessibility = "public"
+                    };
+                    EmitResolver(ctx, defaultResolver, validTypes);
+                }
+                else
+                {
+                    foreach (var resolver in resolvers)
+                    {
+                        if (resolver is null) continue;
+                        EmitResolver(ctx, resolver, validTypes);
+                    }
                 }
             });
+    }
+
+    // -----------------------------------------------------------------------
+    //  Emit helper
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Emits the resolver body file and one formatter file per type for the given resolver model.
+    /// </summary>
+    private static void EmitResolver(SourceProductionContext ctx, ResolverModel resolver, List<TypeModel?> validTypes)
+    {
+        // 1) Resolver body file — Instance, GetFormatter<T>, FormatterLookup.
+        ctx.AddSource(
+            resolver.FileHintName + ".g.cs",
+            SourceText.From(GenerateResolverBody(resolver, validTypes), Encoding.UTF8));
+
+        // 2) One partial-class file per formatter type.
+        foreach (var type in validTypes)
+        {
+            ctx.AddSource(
+                resolver.FileHintName + "." + type!.FormatterSimpleName + ".g.cs",
+                SourceText.From(GenerateFormatterFile(resolver, type), Encoding.UTF8));
+        }
     }
 
     // -----------------------------------------------------------------------

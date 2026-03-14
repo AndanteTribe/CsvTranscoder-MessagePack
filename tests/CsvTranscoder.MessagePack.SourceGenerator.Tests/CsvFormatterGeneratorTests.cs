@@ -208,18 +208,19 @@ public class CsvFormatterGeneratorTests
     }
 
     // -----------------------------------------------------------------------
-    //  Attribute injection
+    //  Attribute lives in the library, not in the generator
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void InjectsGeneratedCsvFormatterResolverAttribute()
+    public void GeneratedCsvFormatterResolverAttribute_IsAvailableInLibrary()
     {
-        var (compilation, _) = GeneratorTestHelper.RunGenerator();
-
-        var attrSrc = GetGeneratedSource(compilation, "GeneratedCsvFormatterResolverAttribute");
-        Assert.NotNull(attrSrc);
-        Assert.Contains("GeneratedCsvFormatterResolverAttribute", attrSrc);
-        Assert.Contains("AttributeUsage", attrSrc);
+        // The attribute must be a real type in the CsvTranscoder.MessagePack assembly,
+        // not injected by the generator's post-initialization output.
+        var attrType = typeof(AndanteTribe.Csv.GeneratedCsvFormatterResolverAttribute);
+        Assert.Equal("AndanteTribe.Csv", attrType.Namespace);
+        Assert.True(attrType.IsPublic);
+        // Verify it's in the main library assembly (not a generated/dynamic one)
+        Assert.Equal(typeof(AndanteTribe.Csv.ICsvFormatter<>).Assembly, attrType.Assembly);
     }
 
     // -----------------------------------------------------------------------

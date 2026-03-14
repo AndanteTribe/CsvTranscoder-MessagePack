@@ -32,4 +32,8 @@
         </AssemblyAttribute>
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\CsvTranscoder.MessagePack.SourceGenerator\CsvTranscoder.MessagePack.SourceGenerator.csproj" />
+    </ItemGroup>
+
 </Project>
